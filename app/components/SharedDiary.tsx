@@ -47,6 +47,8 @@ export function SharedDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -288,7 +290,14 @@ export function SharedDiary() {
 
       <div className="space-y-4">
         {entries.map((entry) => (
-          <Card key={entry.id}>
+          <Card
+            key={entry.id}
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => {
+              setSelectedEntry(entry);
+              setIsDetailDialogOpen(true);
+            }}
+          >
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
                 <div
@@ -312,14 +321,9 @@ export function SharedDiary() {
                     </span>
                   </div>
                   <h3 className="text-gray-900 mb-1">{entry.title}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{entry.content}</p>
-                  {entry.imageUrl && (
-                    <img
-                      src={entry.imageUrl}
-                      alt="Entry"
-                      className="w-full h-48 object-cover rounded-lg"
-                    />
-                  )}
+                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                    {entry.content}
+                  </p>
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                     <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
                       <span className="text-xs text-blue-600">
@@ -336,6 +340,83 @@ export function SharedDiary() {
           </Card>
         ))}
       </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>기록 상세</DialogTitle>
+          </DialogHeader>
+          {selectedEntry && (
+            <div className="space-y-4 mt-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    selectedEntry.type === "meal"
+                      ? "bg-orange-100"
+                      : selectedEntry.type === "medicine"
+                      ? "bg-green-100"
+                      : "bg-blue-100"
+                  }`}
+                >
+                  {getIcon(selectedEntry.type)}
+                </div>
+                <div>
+                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                    {getTypeLabel(selectedEntry.type)}
+                  </span>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedEntry.date} {selectedEntry.time}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-medium mb-2">
+                  {selectedEntry.title}
+                </h3>
+                <p className="text-gray-700 whitespace-pre-wrap">
+                  {selectedEntry.content}
+                </p>
+              </div>
+
+              {selectedEntry.imageUrl && (
+                <div className="border-t pt-4">
+                  <img
+                    src={selectedEntry.imageUrl}
+                    alt="Entry"
+                    className="w-full rounded-lg"
+                  />
+                </div>
+              )}
+
+              <div className="border-t pt-4 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-sm text-blue-600">
+                    {selectedEntry.authorName[0]}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-900">
+                    {selectedEntry.authorName}
+                  </p>
+                  <p className="text-xs text-gray-500">작성자</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsDetailDialogOpen(false)}
+                >
+                  닫기
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

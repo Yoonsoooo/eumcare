@@ -23,7 +23,6 @@ import {
   SelectValue,
 } from "./ui/select";
 import { apiClient } from "../utils/api";
-import { getCurrentUser } from "../utils/auth";
 import { toast } from "sonner";
 
 interface WeeklyItem {
@@ -36,7 +35,11 @@ interface WeeklyItem {
   content?: string;
 }
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (tab: "diary" | "schedule") => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const [weeklyItems, setWeeklyItems] = useState<WeeklyItem[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -52,16 +55,7 @@ export function Dashboard() {
   });
 
   useEffect(() => {
-    const initDashboard = async () => {
-      const { user } = await getCurrentUser();
-
-      // 🔑 유저가 로그인되어 있을 때만 데이터를 불러옴
-      if (user) {
-        loadWeeklyData();
-      }
-    };
-
-    initDashboard();
+    loadWeeklyData();
   }, []);
 
   async function loadWeeklyData() {
@@ -273,7 +267,10 @@ export function Dashboard() {
               {displayedItems.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  onClick={() =>
+                    onNavigate?.(item.type === "diary" ? "diary" : "schedule")
+                  }
+                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center ${getBackgroundColor(

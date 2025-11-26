@@ -47,6 +47,10 @@ export function ScheduleManager() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(
+    null
+  );
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     new Date()
   );
@@ -275,7 +279,14 @@ export function ScheduleManager() {
       <div className="space-y-3">
         <h3 className="text-gray-700">예정된 일정</h3>
         {schedules.map((schedule) => (
-          <Card key={schedule.id}>
+          <Card
+            key={schedule.id}
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => {
+              setSelectedSchedule(schedule);
+              setIsDetailDialogOpen(true);
+            }}
+          >
             <CardContent className="p-4">
               <div className="flex gap-3">
                 <div className="flex flex-col items-center pt-1">
@@ -308,12 +319,14 @@ export function ScheduleManager() {
                     {schedule.location && (
                       <div className="flex items-center gap-1">
                         <MapPin className="w-4 h-4" />
-                        <span>{schedule.location}</span>
+                        <span className="line-clamp-1">
+                          {schedule.location}
+                        </span>
                       </div>
                     )}
                   </div>
                   {schedule.notes && (
-                    <p className="text-sm text-gray-500 mt-2">
+                    <p className="text-sm text-gray-500 mt-2 line-clamp-1">
                       {schedule.notes}
                     </p>
                   )}
@@ -333,6 +346,99 @@ export function ScheduleManager() {
           </Card>
         ))}
       </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>일정 상세</DialogTitle>
+          </DialogHeader>
+          {selectedSchedule && (
+            <div className="space-y-4 mt-4">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-center p-3 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {selectedSchedule.date.split("-")[2]}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {selectedSchedule.date.split("-")[1]}월
+                  </div>
+                </div>
+                <div>
+                  <span
+                    className={`px-2 py-1 text-xs rounded ${getCategoryColor(
+                      selectedSchedule.category
+                    )}`}
+                  >
+                    {getCategoryLabel(selectedSchedule.category)}
+                  </span>
+                  {selectedSchedule.reminder && (
+                    <div className="flex items-center gap-1 mt-2 text-sm text-gray-600">
+                      <Bell className="w-4 h-4" />
+                      <span>알림 설정됨</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <h3 className="text-lg font-medium mb-3">
+                  {selectedSchedule.title}
+                </h3>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Clock className="w-5 h-5 text-gray-500" />
+                    <span>{selectedSchedule.time}</span>
+                  </div>
+
+                  {selectedSchedule.location && (
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <MapPin className="w-5 h-5 text-gray-500" />
+                      <span>{selectedSchedule.location}</span>
+                    </div>
+                  )}
+
+                  {selectedSchedule.notes && (
+                    <div className="pt-3 border-t">
+                      <p className="text-sm font-medium text-gray-900 mb-1">
+                        메모
+                      </p>
+                      <p className="text-gray-700 whitespace-pre-wrap">
+                        {selectedSchedule.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-4 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-sm text-blue-600">
+                    {selectedSchedule.authorName[0]}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-900">
+                    {selectedSchedule.authorName}
+                  </p>
+                  <p className="text-xs text-gray-500">작성자</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsDetailDialogOpen(false)}
+                >
+                  닫기
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

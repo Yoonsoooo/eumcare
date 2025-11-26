@@ -109,7 +109,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "home":
-        return <Dashboard />;
+        return <Dashboard onNavigate={(tab) => setActiveTab(tab)} />;
       case "diary":
         return <SharedDiary />;
       case "schedule":
@@ -119,7 +119,7 @@ export default function App() {
       case "family":
         return <FamilyMembers />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={(tab) => setActiveTab(tab)} />;
     }
   };
 
