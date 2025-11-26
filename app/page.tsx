@@ -8,6 +8,7 @@ import {
   Users,
   Menu,
   LogOut,
+  Bell,
 } from "lucide-react";
 import { Dashboard } from "./components/Dashboard";
 import { SharedDiary } from "./components/SharedDiary";
@@ -18,6 +19,11 @@ import { AuthDialog } from "./components/AuthDialog";
 import { OnboardingDialog } from "./components/OnboardingDialog";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { Button } from "./components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "./components/ui/popover";
 import { getSession, signOut, getCurrentUser } from "./utils/auth";
 import { apiClient } from "./utils/api";
 import { Toaster } from "./components/ui/sonner";
@@ -25,7 +31,7 @@ import { toast } from "sonner";
 
 type Tab = "home" | "diary" | "schedule" | "community" | "family";
 
-export default function Page() {
+export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -33,6 +39,16 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [recentActivities, setRecentActivities] = useState([
+    {
+      id: 1,
+      member: "큰아들",
+      action: "점심 식사 기록 추가",
+      time: "2시간 전",
+    },
+    { id: 2, member: "딸", action: "약 복용 완료 체크", time: "4시간 전" },
+    { id: 3, member: "큰며느리", action: "병원 예약 등록", time: "어제" },
+  ]);
 
   useEffect(() => {
     checkAuth();
@@ -165,6 +181,45 @@ export default function Page() {
             <h1 className="text-blue-600">이음케어</h1>
           </div>
           <div className="flex items-center gap-2">
+            {user && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Bell className="w-5 h-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-3">
+                    <h3 className="font-medium">최근 활동</h3>
+                    <div className="space-y-3">
+                      {recentActivities.map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-start gap-3 pb-3 border-b last:border-0"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-sm text-blue-600">
+                              {activity.member[0]}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm">
+                              <span className="text-blue-600">
+                                {activity.member}
+                              </span>
+                              님이 {activity.action}했습니다
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {activity.time}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             {user ? (
               <Button variant="outline" size="sm" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4 mr-1" />

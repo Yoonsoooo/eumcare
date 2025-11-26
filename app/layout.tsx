@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import "./index.css";
 // import "./globals.css"; // 만약 globals.css 파일이 없다면 이 줄은 지우세요!
@@ -18,10 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>
-        {/* children 자리에 page.tsx 내용이 들어옵니다 */}
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -8,6 +8,7 @@ import {
   Utensils,
   FileText,
   Calendar,
+  X,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -46,9 +47,13 @@ export function SharedDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [showAddCategory, setShowAddCategory] = useState(false);
   const [newEntry, setNewEntry] = useState({
     type: "note" as "meal" | "medicine" | "note",
-    title: "",
+    date: new Date().toISOString().split("T")[0],
+    time: new Date().toTimeString().slice(0, 5),
     content: "",
   });
 
@@ -68,23 +73,43 @@ export function SharedDiary() {
   }
 
   const handleAddEntry = async () => {
-    if (!newEntry.title || !newEntry.content) return;
+    if (!newEntry.date || !newEntry.time || !newEntry.content) return;
 
     try {
       const { data } = await apiClient.addDiaryEntry(
         newEntry.type,
-        newEntry.title,
+        `${newEntry.date} ${newEntry.time}`, // title을 날짜+시간으로
         newEntry.content
       );
 
       setEntries([data, ...entries]);
-      setNewEntry({ type: "note", title: "", content: "" });
+      setNewEntry({
+        type: "note",
+        date: new Date().toISOString().split("T")[0],
+        time: new Date().toTimeString().slice(0, 5),
+        content: "",
+      });
       setIsDialogOpen(false);
       toast.success("기록이 추가되었습니다!");
     } catch (error) {
       console.error("Failed to add diary entry:", error);
       toast.error("기록 추가에 실패했습니다");
     }
+  };
+
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) return;
+    setCustomCategories([...customCategories, newCategoryName]);
+    setNewCategoryName("");
+    setShowAddCategory(false);
+    toast.success("카테고리가 추가되었습니다!");
+  };
+
+  const handleRemoveCategory = (categoryToRemove: string) => {
+    setCustomCategories(
+      customCategories.filter((cat) => cat !== categoryToRemove)
+    );
+    toast.success("카테고리가 삭제되었습니다");
   };
 
   const getIcon = (type: string) => {
@@ -140,18 +165,91 @@ export function SharedDiary() {
                     <SelectItem value="meal">식사</SelectItem>
                     <SelectItem value="medicine">약 복용</SelectItem>
                     <SelectItem value="note">일반 기록</SelectItem>
+                    {customCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        <div className="flex items-center justify-between w-full">
+                          <span>{category}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+
+                {!showAddCategory ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => setShowAddCategory(true)}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />새 카테고리 추가
+                  </Button>
+                ) : (
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      placeholder="카테고리 이름"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" && handleAddCategory()
+                      }
+                    />
+                    <Button size="sm" onClick={handleAddCategory}>
+                      추가
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setShowAddCategory(false);
+                        setNewCategoryName("");
+                      }}
+                    >
+                      취소
+                    </Button>
+                  </div>
+                )}
+
+                {customCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {customCategories.map((category) => (
+                      <div
+                        key={category}
+                        className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded text-sm"
+                      >
+                        <span>{category}</span>
+                        <button
+                          onClick={() => handleRemoveCategory(category)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label>제목</Label>
-                <Input
-                  placeholder="제목을 입력하세요"
-                  value={newEntry.title}
-                  onChange={(e) =>
-                    setNewEntry({ ...newEntry, title: e.target.value })
-                  }
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>날짜</Label>
+                  <Input
+                    type="date"
+                    value={newEntry.date}
+                    onChange={(e) =>
+                      setNewEntry({ ...newEntry, date: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>시간</Label>
+                  <Input
+                    type="time"
+                    value={newEntry.time}
+                    onChange={(e) =>
+                      setNewEntry({ ...newEntry, time: e.target.value })
+                    }
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>내용</Label>

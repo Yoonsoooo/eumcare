@@ -36,7 +36,7 @@ export function FamilyMembers() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteUserId, setInviteUserId] = useState("");
 
   useEffect(() => {
     loadMembers();
@@ -54,12 +54,12 @@ export function FamilyMembers() {
   }
 
   const handleInvite = async () => {
-    if (!inviteEmail) return;
+    if (!inviteUserId) return;
 
     try {
-      await apiClient.inviteMember(inviteEmail);
-      toast.success(`${inviteEmail}로 초대 메일이 발송되었습니다!`);
-      setInviteEmail("");
+      await apiClient.inviteMember(inviteUserId);
+      toast.success(`사용자 @${inviteUserId}에게 초대를 보냈습니다!`);
+      setInviteUserId("");
       setIsInviteDialogOpen(false);
     } catch (error) {
       console.error("Failed to invite member:", error);
@@ -90,12 +90,12 @@ export function FamilyMembers() {
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label>이메일 주소</Label>
+                <Label>사용자 ID</Label>
                 <Input
-                  type="email"
-                  placeholder="example@email.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
+                  type="text"
+                  placeholder="사용자 ID 입력"
+                  value={inviteUserId}
+                  onChange={(e) => setInviteUserId(e.target.value)}
                 />
               </div>
               <Button className="w-full" onClick={handleInvite}>

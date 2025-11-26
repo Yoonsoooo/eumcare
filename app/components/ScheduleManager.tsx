@@ -261,12 +261,12 @@ export function ScheduleManager() {
 
       {/* Calendar View */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-6">
           <Calendar
             mode="single"
             selected={selectedDate}
             onSelect={setSelectedDate}
-            className="rounded-md"
+            className="rounded-md w-full flex justify-center [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_table]:w-full [&_td]:p-3 [&_th]:p-3"
           />
         </CardContent>
       </Card>
