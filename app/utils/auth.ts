@@ -1,8 +1,32 @@
-import { supabase } from "./supabase";
+import { createClient } from "@supabase/supabase-js";
+
+// 1. 환경변수에서 주소와 키를 가져옵니다.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+// 2. Supabase 클라이언트를 여기서 바로 생성합니다.
+export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// --- 아래 함수들은 그대로 유지됩니다 ---
 
 export async function signUp(email: string, password: string, name: string) {
-  // Note: Since we're using admin.createUser on the server, we'll handle this through API
-  return { error: "Please use the signup through server API" };
+  // 클라이언트 사이드 회원가입 처리
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        name,
+      },
+    },
+  });
+
+  if (error) {
+    console.error("Sign up error:", error);
+    return { error: error.message };
+  }
+
+  return { data, error: null };
 }
 
 export async function signIn(email: string, password: string) {
@@ -47,5 +71,3 @@ export async function getCurrentUser() {
   }
   return { user, error: null };
 }
-
-export { supabase };

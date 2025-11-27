@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   Calendar as CalendarIcon,
   Clock,
   MapPin,
-  Bell,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -16,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
@@ -27,8 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Calendar } from "./ui/calendar";
 import { apiClient } from "../utils/api";
+import { getCurrentUser } from "../utils/auth";
 import { toast } from "sonner";
 
 interface Schedule {
@@ -43,17 +46,181 @@ interface Schedule {
   authorName: string;
 }
 
+// ✅ 로컬 날짜를 YYYY-MM-DD 형식으로 변환 (UTC 문제 해결)
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// 커스텀 달력 컴포넌트
+interface CustomCalendarProps {
+  selectedDate: Date;
+  onSelectDate: (date: Date) => void;
+  scheduleDates: Set<string>;
+}
+
+function CustomCalendar({
+  selectedDate,
+  onSelectDate,
+  scheduleDates,
+}: CustomCalendarProps) {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const daysInMonth = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days: (Date | null)[] = [];
+
+    for (let i = 0; i < firstDay.getDay(); i++) {
+      days.push(null);
+    }
+
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i));
+    }
+
+    return days;
+  }, [currentMonth]);
+
+  const isToday = (date: Date) => {
+    return formatLocalDate(date) === formatLocalDate(new Date());
+  };
+
+  const isSelected = (date: Date) => {
+    return formatLocalDate(date) === formatLocalDate(selectedDate);
+  };
+
+  const hasSchedule = (date: Date) => {
+    return scheduleDates.has(formatLocalDate(date));
+  };
+
+  const prevMonth = () => {
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
+    );
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
+    );
+  };
+
+  const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+
+  return (
+    <div className="w-full max-w-sm mx-auto">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-3">
+        <Button variant="ghost" size="sm" onClick={prevMonth}>
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <h3 className="text-base font-semibold">
+          {currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월
+        </h3>
+        <Button variant="ghost" size="sm" onClick={nextMonth}>
+          <ChevronRight className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* 요일 헤더 */}
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {weekDays.map((day, idx) => (
+          <div
+            key={day}
+            className={`text-center text-xs font-medium py-1 ${
+              idx === 0
+                ? "text-red-500"
+                : idx === 6
+                ? "text-blue-500"
+                : "text-gray-500"
+            }`}
+          >
+            {day}
+          </div>
+        ))}
+      </div>
+
+      {/* 날짜 그리드 - 크기 축소 & 네모 모양 */}
+      <div className="grid grid-cols-7 gap-1">
+        {daysInMonth.map((date, index) => (
+          <div key={index} className="p-0.5">
+            {date ? (
+              <button
+                onClick={() => onSelectDate(date)}
+                className={`
+                  w-full h-8 rounded-md flex items-center justify-center
+                  text-sm transition-all relative
+                  ${
+                    isSelected(date)
+                      ? "bg-blue-600 text-white font-bold"
+                      : isToday(date)
+                      ? "bg-blue-100 text-blue-700 font-semibold"
+                      : hasSchedule(date)
+                      ? "bg-orange-100 text-orange-700 font-medium"
+                      : "hover:bg-gray-100 text-gray-700"
+                  }
+                  ${
+                    date.getDay() === 0 &&
+                    !isSelected(date) &&
+                    !hasSchedule(date)
+                      ? "text-red-500"
+                      : ""
+                  }
+                  ${
+                    date.getDay() === 6 &&
+                    !isSelected(date) &&
+                    !hasSchedule(date)
+                      ? "text-blue-500"
+                      : ""
+                  }
+                `}
+              >
+                {date.getDate()}
+              </button>
+            ) : (
+              <div className="w-full h-8" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* 범례 */}
+      <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-500">
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-sm bg-blue-600" />
+          <span>선택</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-sm bg-orange-100" />
+          <span>일정 있음</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-sm bg-blue-100" />
+          <span>오늘</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ScheduleManager() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(
     null
   );
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    new Date()
-  );
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showAllSchedules, setShowAllSchedules] = useState(false);
+
   const [newSchedule, setNewSchedule] = useState({
     title: "",
     date: "",
@@ -65,19 +232,39 @@ export function ScheduleManager() {
   });
 
   useEffect(() => {
-    loadSchedules();
+    const init = async () => {
+      const { user } = await getCurrentUser();
+      if (user) loadSchedules();
+    };
+    init();
   }, []);
+
+  // 일정이 있는 날짜들의 Set
+  const scheduleDates = useMemo(() => {
+    return new Set(schedules.map((s) => s.date));
+  }, [schedules]);
+
+  // 선택된 날짜의 일정들
+  const filteredSchedules = useMemo(() => {
+    if (showAllSchedules) {
+      return schedules;
+    }
+    const dateStr = formatLocalDate(selectedDate);
+    return schedules.filter((s) => s.date === dateStr);
+  }, [schedules, selectedDate, showAllSchedules]);
 
   async function loadSchedules() {
     try {
       const { data } = await apiClient.getSchedules();
-      setSchedules(
-        (data || []).sort(
-          (a: Schedule, b: Schedule) =>
-            new Date(a.date + " " + a.time).getTime() -
-            new Date(b.date + " " + b.time).getTime()
-        )
-      );
+      if (data) {
+        setSchedules(
+          data.sort(
+            (a: Schedule, b: Schedule) =>
+              new Date(a.date + " " + a.time).getTime() -
+              new Date(b.date + " " + b.time).getTime()
+          )
+        );
+      }
     } catch (error) {
       console.error("Failed to load schedules:", error);
     } finally {
@@ -86,69 +273,91 @@ export function ScheduleManager() {
   }
 
   const handleAddSchedule = async () => {
-    if (!newSchedule.title || !newSchedule.date || !newSchedule.time) return;
-
+    if (!newSchedule.title || !newSchedule.date || !newSchedule.time) {
+      toast.error("제목, 날짜, 시간을 모두 입력해주세요");
+      return;
+    }
     try {
+      const { user } = await getCurrentUser();
+      if (!user) {
+        toast.error("로그인이 필요합니다.");
+        return;
+      }
       const { data } = await apiClient.addSchedule(newSchedule);
-
-      const updatedSchedules = [...schedules, data].sort(
-        (a, b) =>
-          new Date(a.date + " " + a.time).getTime() -
-          new Date(b.date + " " + b.time).getTime()
-      );
-
-      setSchedules(updatedSchedules);
-      setNewSchedule({
-        title: "",
-        date: "",
-        time: "",
-        location: "",
-        notes: "",
-        category: "other",
-        reminder: true,
-      });
-      setIsDialogOpen(false);
-      toast.success("일정이 추가되었습니다!");
+      if (data) {
+        toast.success("일정이 추가되었습니다!");
+        setIsDialogOpen(false);
+        setNewSchedule({
+          title: "",
+          date: "",
+          time: "",
+          location: "",
+          notes: "",
+          category: "other",
+          reminder: true,
+        });
+        loadSchedules();
+      }
     } catch (error) {
-      console.error("Failed to add schedule:", error);
-      toast.error("일정 추가에 실패했습니다");
+      console.error("Error:", error);
+      toast.error("저장에 실패했습니다.");
     }
   };
 
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case "hospital":
-        return "병원";
-      case "medicine":
-        return "약 복용";
-      case "therapy":
-        return "치료";
-      default:
-        return "기타";
+  const handleDelete = async () => {
+    if (!selectedSchedule) return;
+
+    if (confirm("정말 이 일정을 삭제하시겠습니까?")) {
+      try {
+        await apiClient.deleteSchedule(selectedSchedule.id);
+        toast.success("일정이 삭제되었습니다.");
+        setIsDetailOpen(false);
+        setSelectedSchedule(null);
+        loadSchedules();
+      } catch (error) {
+        console.error("Delete error:", error);
+        toast.error("삭제에 실패했습니다.");
+      }
     }
   };
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "hospital":
-        return "bg-blue-100 text-blue-700";
-      case "medicine":
-        return "bg-green-100 text-green-700";
-      case "therapy":
-        return "bg-purple-100 text-purple-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
+  const getCategoryLabel = (c: string) =>
+    c === "hospital"
+      ? "병원"
+      : c === "medicine"
+      ? "약 복용"
+      : c === "therapy"
+      ? "치료"
+      : "기타";
+
+  const getCategoryColor = (c: string) =>
+    c === "hospital"
+      ? "bg-blue-100 text-blue-700"
+      : c === "medicine"
+      ? "bg-green-100 text-green-700"
+      : c === "therapy"
+      ? "bg-purple-100 text-purple-700"
+      : "bg-gray-100 text-gray-700";
+
+  const formatSelectedDate = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth() + 1;
+    const day = selectedDate.getDate();
+    const weekDay = ["일", "월", "화", "수", "목", "금", "토"][
+      selectedDate.getDay()
+    ];
+    return `${year}년 ${month}월 ${day}일 (${weekDay})`;
   };
 
   return (
     <div className="space-y-4 pb-20 md:pb-6">
+      {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <h2>일정 관리</h2>
+        <h2 className="text-xl font-bold">일정 관리</h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
+            <Button size="sm">
+              <Plus className="w-4 h-4 mr-1" />
               일정 추가
             </Button>
           </DialogTrigger>
@@ -158,7 +367,18 @@ export function ScheduleManager() {
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label>일정 유형</Label>
+                <Label>제목 *</Label>
+                <Input
+                  placeholder="일정 제목을 입력하세요"
+                  value={newSchedule.title}
+                  onChange={(e) =>
+                    setNewSchedule({ ...newSchedule, title: e.target.value })
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>카테고리</Label>
                 <Select
                   value={newSchedule.category}
                   onValueChange={(value: Schedule["category"]) =>
@@ -176,19 +396,10 @@ export function ScheduleManager() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>제목</Label>
-                <Input
-                  placeholder="일정 제목을 입력하세요"
-                  value={newSchedule.title}
-                  onChange={(e) =>
-                    setNewSchedule({ ...newSchedule, title: e.target.value })
-                  }
-                />
-              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>날짜</Label>
+                  <Label>날짜 *</Label>
                   <Input
                     type="date"
                     value={newSchedule.date}
@@ -198,7 +409,7 @@ export function ScheduleManager() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>시간</Label>
+                  <Label>시간 *</Label>
                   <Input
                     type="time"
                     value={newSchedule.time}
@@ -208,8 +419,9 @@ export function ScheduleManager() {
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label>장소 (선택)</Label>
+                <Label>장소</Label>
                 <Input
                   placeholder="장소를 입력하세요"
                   value={newSchedule.location}
@@ -218,223 +430,184 @@ export function ScheduleManager() {
                   }
                 />
               </div>
+
               <div className="space-y-2">
-                <Label>메모 (선택)</Label>
+                <Label>메모</Label>
                 <Textarea
                   placeholder="메모를 입력하세요"
                   value={newSchedule.notes}
                   onChange={(e) =>
                     setNewSchedule({ ...newSchedule, notes: e.target.value })
                   }
-                  rows={3}
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="reminder"
-                  checked={newSchedule.reminder}
-                  onChange={(e) =>
-                    setNewSchedule({
-                      ...newSchedule,
-                      reminder: e.target.checked,
-                    })
-                  }
-                  className="w-4 h-4"
-                />
-                <Label htmlFor="reminder" className="cursor-pointer">
-                  알림 받기
-                </Label>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  취소
-                </Button>
-                <Button className="flex-1" onClick={handleAddSchedule}>
-                  저장
-                </Button>
-              </div>
+
+              <Button className="w-full" onClick={handleAddSchedule}>
+                저장
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Calendar View */}
+      {/* 커스텀 달력 */}
       <Card>
-        <CardContent className="p-6">
-          <Calendar
-            mode="single"
-            selected={selectedDate}
-            onSelect={setSelectedDate}
-            className="rounded-md w-full flex justify-center [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_table]:w-full [&_td]:p-3 [&_th]:p-3"
+        <CardContent className="p-4">
+          <CustomCalendar
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            scheduleDates={scheduleDates}
           />
         </CardContent>
       </Card>
 
-      {/* Schedule List */}
-      <div className="space-y-3">
-        <h3 className="text-gray-700">예정된 일정</h3>
-        {schedules.map((schedule) => (
-          <Card
-            key={schedule.id}
-            className="cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => {
-              setSelectedSchedule(schedule);
-              setIsDetailDialogOpen(true);
-            }}
-          >
-            <CardContent className="p-4">
-              <div className="flex gap-3">
-                <div className="flex flex-col items-center pt-1">
-                  <div className="text-blue-600">
-                    {schedule.date.split("-")[2]}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {schedule.date.split("-")[1]}월
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span
-                      className={`px-2 py-0.5 text-xs rounded ${getCategoryColor(
-                        schedule.category
-                      )}`}
-                    >
-                      {getCategoryLabel(schedule.category)}
-                    </span>
-                    {schedule.reminder && (
-                      <Bell className="w-3 h-3 text-gray-400" />
-                    )}
-                  </div>
-                  <h3 className="text-gray-900 mb-1">{schedule.title}</h3>
-                  <div className="flex items-center gap-3 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{schedule.time}</span>
-                    </div>
-                    {schedule.location && (
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        <span className="line-clamp-1">
-                          {schedule.location}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {schedule.notes && (
-                    <p className="text-sm text-gray-500 mt-2 line-clamp-1">
-                      {schedule.notes}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2 pt-2 border-t">
-                    <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-xs text-blue-600">
-                        {schedule.authorName[0]}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-600">
-                      {schedule.authorName}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* 선택된 날짜 및 토글 */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-gray-700 font-medium text-sm">
+          {showAllSchedules ? "전체 일정" : formatSelectedDate()}
+        </h3>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAllSchedules(!showAllSchedules)}
+        >
+          {showAllSchedules ? "선택한 날짜만" : "전체 보기"}
+        </Button>
       </div>
 
-      {/* Detail Dialog */}
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* 일정 목록 */}
+      <div className="space-y-3">
+        {loading ? (
+          <div className="text-center py-8 text-gray-500">로딩 중...</div>
+        ) : filteredSchedules.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center text-gray-500">
+              {showAllSchedules
+                ? "등록된 일정이 없습니다."
+                : "선택한 날짜에 일정이 없습니다."}
+            </CardContent>
+          </Card>
+        ) : (
+          filteredSchedules.map((schedule) => (
+            <Card
+              key={schedule.id}
+              className="cursor-pointer hover:bg-gray-50 transition-colors border border-gray-100 shadow-sm"
+              onClick={() => {
+                setSelectedSchedule(schedule);
+                setIsDetailOpen(true);
+              }}
+            >
+              <CardContent className="p-3">
+                <div className="flex gap-3">
+                  {/* 왼쪽 날짜 */}
+                  <div className="flex flex-col items-center justify-center min-w-[2.5rem] border-r border-gray-100 pr-3">
+                    <div className="text-xs text-gray-400">
+                      {schedule.date.split("-")[1]}월
+                    </div>
+                    <div className="text-blue-600 font-bold text-xl">
+                      {schedule.date.split("-")[2]}
+                    </div>
+                  </div>
+
+                  {/* 오른쪽 내용 */}
+                  <div className="flex-1 flex flex-col justify-center min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className={`px-1.5 py-0.5 text-xs rounded font-medium ${getCategoryColor(
+                          schedule.category
+                        )}`}
+                      >
+                        {getCategoryLabel(schedule.category)}
+                      </span>
+                    </div>
+
+                    <h3 className="font-semibold text-sm text-gray-900 truncate">
+                      {schedule.title}
+                    </h3>
+
+                    <div className="h-px bg-gray-200 my-2 w-full" />
+
+                    <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{schedule.time}</span>
+                      </div>
+                      {schedule.location && (
+                        <div className="flex items-center gap-1 truncate">
+                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{schedule.location}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* 상세보기 팝업 */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>일정 상세</DialogTitle>
+            <DialogTitle>상세 정보</DialogTitle>
           </DialogHeader>
+
           {selectedSchedule && (
-            <div className="space-y-4 mt-4">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-center p-3 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {selectedSchedule.date.split("-")[2]}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {selectedSchedule.date.split("-")[1]}월
-                  </div>
-                </div>
-                <div>
-                  <span
-                    className={`px-2 py-1 text-xs rounded ${getCategoryColor(
-                      selectedSchedule.category
-                    )}`}
-                  >
-                    {getCategoryLabel(selectedSchedule.category)}
-                  </span>
-                  {selectedSchedule.reminder && (
-                    <div className="flex items-center gap-1 mt-2 text-sm text-gray-600">
-                      <Bell className="w-4 h-4" />
-                      <span>알림 설정됨</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-medium mb-3">
+            <div className="space-y-4">
+              <div>
+                <span
+                  className={`px-2 py-1 text-xs rounded font-medium ${getCategoryColor(
+                    selectedSchedule.category
+                  )}`}
+                >
+                  {getCategoryLabel(selectedSchedule.category)}
+                </span>
+                <h2 className="text-xl font-bold mt-2">
                   {selectedSchedule.title}
-                </h3>
+                </h2>
+              </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Clock className="w-5 h-5 text-gray-500" />
-                    <span>{selectedSchedule.time}</span>
+              <div className="space-y-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4" /> {selectedSchedule.date}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> {selectedSchedule.time}
+                </div>
+                {selectedSchedule.location && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4" /> {selectedSchedule.location}
                   </div>
-
-                  {selectedSchedule.location && (
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <MapPin className="w-5 h-5 text-gray-500" />
-                      <span>{selectedSchedule.location}</span>
-                    </div>
-                  )}
-
-                  {selectedSchedule.notes && (
-                    <div className="pt-3 border-t">
-                      <p className="text-sm font-medium text-gray-900 mb-1">
-                        메모
-                      </p>
-                      <p className="text-gray-700 whitespace-pre-wrap">
-                        {selectedSchedule.notes}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
-              <div className="border-t pt-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <span className="text-sm text-blue-600">
-                    {selectedSchedule.authorName[0]}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-900">
-                    {selectedSchedule.authorName}
+              {selectedSchedule.notes && (
+                <div className="bg-gray-50 p-3 rounded-md text-sm">
+                  <p className="font-medium mb-1 text-gray-700">메모</p>
+                  <p className="text-gray-600 whitespace-pre-wrap">
+                    {selectedSchedule.notes}
                   </p>
-                  <p className="text-xs text-gray-500">작성자</p>
                 </div>
-              </div>
+              )}
 
-              <div className="flex gap-2">
+              <DialogFooter className="mt-6 gap-2">
                 <Button
                   variant="outline"
+                  onClick={() => setIsDetailOpen(false)}
                   className="flex-1"
-                  onClick={() => setIsDetailDialogOpen(false)}
                 >
                   닫기
                 </Button>
-              </div>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  className="flex-1"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" /> 삭제
+                </Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

@@ -1,16 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Plus,
-  Image as ImageIcon,
-  Pill,
-  Utensils,
-  FileText,
-  Calendar,
-  X,
-} from "lucide-react";
-import { Card, CardContent } from "./ui/card";
+import { Plus, Trash2, Calendar, X, ImageIcon } from "lucide-react"; // 아이콘 추가
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -18,7 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "./ui/dialog";
+import { apiClient } from "../utils/api";
+import { toast } from "sonner";
+import { getCurrentUser } from "../utils/auth";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -29,34 +25,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { apiClient } from "../utils/api";
-import { toast } from "sonner";
 
+// 인터페이스 정의
 interface DiaryEntry {
   id: string;
-  type: "meal" | "medicine" | "note";
+  type: string;
   title: string;
   content: string;
-  date: string;
-  time: string;
-  authorName: string;
-  imageUrl?: string;
+  image_url?: string;
+  created_at: string;
 }
 
 export function SharedDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+
+  // ✨ [추가] 상세보기용 State
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
   const [newEntry, setNewEntry] = useState({
-    type: "note" as "meal" | "medicine" | "note",
-    date: new Date().toISOString().split("T")[0],
-    time: new Date().toTimeString().slice(0, 5),
+    type: "meal",
+    title: "",
     content: "",
+    imageUrl: "",
   });
 
   useEffect(() => {
@@ -65,354 +57,196 @@ export function SharedDiary() {
 
   async function loadEntries() {
     try {
-      const { data } = await apiClient.getDiaryEntries();
-      setEntries(data || []);
-    } catch (error) {
-      console.error("Failed to load diary entries:", error);
-    } finally {
-      setLoading(false);
+      const { user } = await getCurrentUser();
+      if (user) {
+        const { data } = await apiClient.getDiaryEntries();
+        if (data) setEntries(data);
+      }
+    } catch (err) {
+      console.error(err);
     }
   }
 
-  const handleAddEntry = async () => {
-    if (!newEntry.date || !newEntry.time || !newEntry.content) return;
-
+  async function handleAddEntry() {
     try {
-      const { data } = await apiClient.addDiaryEntry(
+      if (!newEntry.title) return toast.error("제목을 입력해주세요");
+      await apiClient.addDiaryEntry(
         newEntry.type,
-        `${newEntry.date} ${newEntry.time}`, // title을 날짜+시간으로
-        newEntry.content
+        newEntry.title,
+        newEntry.content,
+        newEntry.imageUrl
       );
-
-      setEntries([data, ...entries]);
-      setNewEntry({
-        type: "note",
-        date: new Date().toISOString().split("T")[0],
-        time: new Date().toTimeString().slice(0, 5),
-        content: "",
-      });
+      toast.success("작성되었습니다.");
       setIsDialogOpen(false);
-      toast.success("기록이 추가되었습니다!");
-    } catch (error) {
-      console.error("Failed to add diary entry:", error);
-      toast.error("기록 추가에 실패했습니다");
+      setNewEntry({ type: "meal", title: "", content: "", imageUrl: "" });
+      loadEntries();
+    } catch (err) {
+      toast.error("작성 실패");
+    }
+  }
+
+  // ✨ [추가] 삭제 핸들러
+  const handleDelete = async () => {
+    if (!selectedEntry) return;
+    if (confirm("정말 이 일기를 삭제하시겠습니까?")) {
+      try {
+        await apiClient.deleteDiaryEntry(selectedEntry.id);
+        toast.success("삭제되었습니다.");
+        setIsDetailOpen(false);
+        loadEntries();
+      } catch (err) {
+        toast.error("삭제 실패");
+      }
     }
   };
 
-  const handleAddCategory = () => {
-    if (!newCategoryName.trim()) return;
-    setCustomCategories([...customCategories, newCategoryName]);
-    setNewCategoryName("");
-    setShowAddCategory(false);
-    toast.success("카테고리가 추가되었습니다!");
-  };
-
-  const handleRemoveCategory = (categoryToRemove: string) => {
-    setCustomCategories(
-      customCategories.filter((cat) => cat !== categoryToRemove)
-    );
-    toast.success("카테고리가 삭제되었습니다");
-  };
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case "meal":
-        return <Utensils className="w-5 h-5 text-orange-600" />;
-      case "medicine":
-        return <Pill className="w-5 h-5 text-green-600" />;
-      default:
-        return <FileText className="w-5 h-5 text-blue-600" />;
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "meal":
-        return "식사";
-      case "medicine":
-        return "약 복용";
-      default:
-        return "기록";
-    }
-  };
+  const getTypeLabel = (type: string) =>
+    type === "meal"
+      ? "식사"
+      : type === "health"
+      ? "건강"
+      : type === "sleep"
+      ? "수면"
+      : "기타";
 
   return (
-    <div className="space-y-4 pb-20 md:pb-6">
-      <div className="flex items-center justify-between">
-        <h2>공유 다이어리</h2>
+    <div className="space-y-6 pb-20 md:pb-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">공유 다이어리</h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              기록 추가
+              <Plus className="mr-2 h-4 w-4" /> 작성하기
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>새 기록 추가</DialogTitle>
+              <DialogTitle>새 일기 작성</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>기록 유형</Label>
+              <div>
+                <Label>유형</Label>
                 <Select
                   value={newEntry.type}
-                  onValueChange={(value: "meal" | "medicine" | "note") =>
-                    setNewEntry({ ...newEntry, type: value })
-                  }
+                  onValueChange={(v) => setNewEntry({ ...newEntry, type: v })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="meal">식사</SelectItem>
-                    <SelectItem value="medicine">약 복용</SelectItem>
-                    <SelectItem value="note">일반 기록</SelectItem>
-                    {customCategories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        <div className="flex items-center justify-between w-full">
-                          <span>{category}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="health">건강</SelectItem>
+                    <SelectItem value="sleep">수면</SelectItem>
                   </SelectContent>
                 </Select>
-
-                {!showAddCategory ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full mt-2"
-                    onClick={() => setShowAddCategory(true)}
-                  >
-                    <Plus className="w-3 h-3 mr-1" />새 카테고리 추가
-                  </Button>
-                ) : (
-                  <div className="flex gap-2 mt-2">
-                    <Input
-                      placeholder="카테고리 이름"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      onKeyDown={(e) =>
-                        e.key === "Enter" && handleAddCategory()
-                      }
-                    />
-                    <Button size="sm" onClick={handleAddCategory}>
-                      추가
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setShowAddCategory(false);
-                        setNewCategoryName("");
-                      }}
-                    >
-                      취소
-                    </Button>
-                  </div>
-                )}
-
-                {customCategories.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {customCategories.map((category) => (
-                      <div
-                        key={category}
-                        className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded text-sm"
-                      >
-                        <span>{category}</span>
-                        <button
-                          onClick={() => handleRemoveCategory(category)}
-                          className="text-gray-500 hover:text-gray-700"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>날짜</Label>
-                  <Input
-                    type="date"
-                    value={newEntry.date}
-                    onChange={(e) =>
-                      setNewEntry({ ...newEntry, date: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>시간</Label>
-                  <Input
-                    type="time"
-                    value={newEntry.time}
-                    onChange={(e) =>
-                      setNewEntry({ ...newEntry, time: e.target.value })
-                    }
-                  />
-                </div>
+              <div>
+                <Label>제목</Label>
+                <Input
+                  value={newEntry.title}
+                  onChange={(e) =>
+                    setNewEntry({ ...newEntry, title: e.target.value })
+                  }
+                />
               </div>
-              <div className="space-y-2">
+              <div>
                 <Label>내용</Label>
                 <Textarea
-                  placeholder="내용을 입력하세요"
                   value={newEntry.content}
                   onChange={(e) =>
                     setNewEntry({ ...newEntry, content: e.target.value })
                   }
-                  rows={4}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>사진 추가 (선택)</Label>
-                <Button variant="outline" className="w-full">
-                  <ImageIcon className="w-4 h-4 mr-2" />
-                  사진 선택
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  취소
-                </Button>
-                <Button className="flex-1" onClick={handleAddEntry}>
-                  저장
-                </Button>
-              </div>
+              <Button onClick={handleAddEntry} className="w-full">
+                저장
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
         {entries.map((entry) => (
           <Card
             key={entry.id}
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            // ✨ [수정] 카드 클릭 이벤트
+            className="cursor-pointer hover:shadow-md transition-all"
             onClick={() => {
               setSelectedEntry(entry);
-              setIsDetailDialogOpen(true);
+              setIsDetailOpen(true);
             }}
           >
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    entry.type === "meal"
-                      ? "bg-orange-100"
-                      : entry.type === "medicine"
-                      ? "bg-green-100"
-                      : "bg-blue-100"
-                  }`}
-                >
-                  {getIcon(entry.type)}
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                    {getTypeLabel(entry.type)}
+                  </span>
+                  <CardTitle className="text-lg mt-2">{entry.title}</CardTitle>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded">
-                      {getTypeLabel(entry.type)}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      {entry.date} {entry.time}
-                    </span>
-                  </div>
-                  <h3 className="text-gray-900 mb-1">{entry.title}</h3>
-                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                    {entry.content}
-                  </p>
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-xs text-blue-600">
-                        {entry.authorName[0]}
-                      </span>
-                    </div>
-                    <span className="text-sm text-gray-600">
-                      {entry.authorName}
-                    </span>
-                  </div>
-                </div>
+                <span className="text-xs text-gray-500">
+                  {new Date(entry.created_at).toLocaleDateString()}
+                </span>
               </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 line-clamp-2">
+                {entry.content}
+              </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Detail Dialog */}
-      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* ✨ [추가] 상세 팝업 */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>기록 상세</DialogTitle>
+            <DialogTitle>일기 상세</DialogTitle>
           </DialogHeader>
+
           {selectedEntry && (
-            <div className="space-y-4 mt-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    selectedEntry.type === "meal"
-                      ? "bg-orange-100"
-                      : selectedEntry.type === "medicine"
-                      ? "bg-green-100"
-                      : "bg-blue-100"
-                  }`}
-                >
-                  {getIcon(selectedEntry.type)}
-                </div>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b pb-4">
                 <div>
-                  <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                  <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
                     {getTypeLabel(selectedEntry.type)}
                   </span>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {selectedEntry.date} {selectedEntry.time}
-                  </p>
+                  <h2 className="text-2xl font-bold mt-2">
+                    {selectedEntry.title}
+                  </h2>
+                </div>
+                <div className="text-right text-sm text-gray-500">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />{" "}
+                    {new Date(selectedEntry.created_at).toLocaleDateString()}
+                  </div>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-medium mb-2">
-                  {selectedEntry.title}
-                </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {selectedEntry.content}
-                </p>
+              <div className="min-h-[100px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+                {selectedEntry.content}
               </div>
 
-              {selectedEntry.imageUrl && (
-                <div className="border-t pt-4">
-                  <img
-                    src={selectedEntry.imageUrl}
-                    alt="Entry"
-                    className="w-full rounded-lg"
-                  />
+              {selectedEntry.image_url && (
+                <div className="rounded-lg overflow-hidden border">
+                  {/* 이미지 표시 로직 (Supabase Storage 사용 시 src 수정 필요) */}
+                  <div className="bg-gray-100 h-40 flex items-center justify-center text-gray-400">
+                    <ImageIcon className="h-8 w-8 mr-2" /> 이미지
+                  </div>
                 </div>
               )}
 
-              <div className="border-t pt-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  <span className="text-sm text-blue-600">
-                    {selectedEntry.authorName[0]}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-900">
-                    {selectedEntry.authorName}
-                  </p>
-                  <p className="text-xs text-gray-500">작성자</p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
+              <DialogFooter>
                 <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => setIsDetailDialogOpen(false)}
+                  variant="destructive"
+                  onClick={handleDelete}
+                  className="w-full"
                 >
-                  닫기
+                  <Trash2 className="mr-2 h-4 w-4" /> 삭제하기
                 </Button>
-              </div>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>
