@@ -14,11 +14,12 @@ import {
   Moon,
   X,
   ChevronDown,
+  Type, // ✨ 글자 크기 아이콘
 } from "lucide-react";
 import { Dashboard } from "./components/Dashboard";
 import { SharedDiary } from "./components/SharedDiary";
 import { ScheduleManager } from "./components/ScheduleManager";
-import { MedicineReminder } from "./components/MedicineReminder"; // ✨ 추가
+import { MedicineReminder } from "./components/MedicineReminder";
 import { Community } from "./components/Community";
 import { FamilyMembers } from "./components/FamilyMembers";
 import { AuthDialog } from "./components/AuthDialog";
@@ -35,8 +36,10 @@ import { apiClient } from "./utils/api";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 
-// ✨ reminder 추가
 type Tab = "home" | "diary" | "schedule" | "reminder" | "community" | "family";
+
+// ✨ 글자 크기 타입
+type FontSize = "default" | "large" | "xlarge";
 
 interface RecentActivity {
   id: string;
@@ -61,7 +64,53 @@ export default function App() {
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [showAllActivities, setShowAllActivities] = useState(false);
 
-  // ... (기존 useEffect, 함수들 그대로 유지) ...
+  // ✨ 글자 크기 상태 (localStorage에 저장)
+  const [fontSize, setFontSize] = useState<FontSize>("default");
+
+  // ✨ 글자 크기 설정 불러오기
+  useEffect(() => {
+    const saved = localStorage.getItem("fontSize") as FontSize;
+    if (saved) {
+      setFontSize(saved);
+    }
+  }, []);
+
+  // ✨ 글자 크기 변경 시 저장
+  const handleFontSizeChange = (size: FontSize) => {
+    setFontSize(size);
+    localStorage.setItem("fontSize", size);
+    toast.success(
+      size === "default"
+        ? "기본 크기로 변경됨"
+        : size === "large"
+        ? "큰 글씨로 변경됨"
+        : "아주 큰 글씨로 변경됨"
+    );
+  };
+
+  // ✨ 글자 크기에 따른 CSS 클래스
+  const getFontSizeClass = () => {
+    switch (fontSize) {
+      case "large":
+        return "text-lg font-medium";
+      case "xlarge":
+        return "text-xl font-semibold";
+      default:
+        return "text-base font-normal";
+    }
+  };
+
+  // ✨ 글자 크기 배율
+  const getFontScale = () => {
+    switch (fontSize) {
+      case "large":
+        return 1.2;
+      case "xlarge":
+        return 1.5;
+      default:
+        return 1;
+    }
+  };
 
   useEffect(() => {
     checkAuth();
@@ -274,23 +323,35 @@ export default function App() {
     );
   }
 
-  // ✨ renderContent 수정
+  // ✨ fontSize를 props로 전달
   const renderContent = () => {
+    const fontScale = getFontScale();
+
     switch (activeTab) {
       case "home":
-        return <Dashboard onNavigate={(tab) => setActiveTab(tab as Tab)} />;
+        return (
+          <Dashboard
+            onNavigate={(tab) => setActiveTab(tab as Tab)}
+            fontScale={fontScale}
+          />
+        );
       case "diary":
-        return <SharedDiary />;
+        return <SharedDiary fontScale={fontScale} />;
       case "schedule":
-        return <ScheduleManager />;
-      case "reminder": // ✨ 추가
-        return <MedicineReminder />;
+        return <ScheduleManager fontScale={fontScale} />;
+      case "reminder":
+        return <MedicineReminder fontScale={fontScale} />;
       case "community":
-        return <Community />;
+        return <Community fontScale={fontScale} />;
       case "family":
-        return <FamilyMembers />;
+        return <FamilyMembers fontScale={fontScale} />;
       default:
-        return <Dashboard onNavigate={(tab) => setActiveTab(tab as Tab)} />;
+        return (
+          <Dashboard
+            onNavigate={(tab) => setActiveTab(tab as Tab)}
+            fontScale={fontScale}
+          />
+        );
     }
   };
 
@@ -312,7 +373,7 @@ export default function App() {
         activeTab === tab
           ? "bg-orange-50 text-orange-600"
           : "text-gray-600 hover:bg-orange-50/50"
-      }`}
+      } ${getFontSizeClass()}`}
     >
       <Icon className="w-5 h-5" />
       <span>{label}</span>
@@ -326,7 +387,7 @@ export default function App() {
   const hasMoreActivities = recentActivities.length > 4;
 
   return (
-    <div className="min-h-screen bg-orange-50/30">
+    <div className={`min-h-screen bg-orange-50/30 ${getFontSizeClass()}`}>
       {/* Header */}
       <header className="bg-white border-b border-orange-100 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -338,7 +399,9 @@ export default function App() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 p-4">
-                <div className="flex flex-col gap-2 mt-8">
+                <div
+                  className={`flex flex-col gap-2 mt-8 ${getFontSizeClass()}`}
+                >
                   <NavButton tab="home" icon={Home} label="홈" />
                   <NavButton
                     tab="diary"
@@ -346,8 +409,7 @@ export default function App() {
                     label="공유 다이어리"
                   />
                   <NavButton tab="schedule" icon={Calendar} label="일정 관리" />
-                  <NavButton tab="reminder" icon={Bell} label="약 알림" />{" "}
-                  {/* ✨ 추가 */}
+                  <NavButton tab="reminder" icon={Bell} label="약 알림" />
                   <NavButton
                     tab="community"
                     icon={MessageCircle}
@@ -357,11 +419,86 @@ export default function App() {
                 </div>
               </SheetContent>
             </Sheet>
-            <h1 className="text-orange-600 font-bold text-xl">이음케어</h1>
+            <h1
+              className={`text-orange-600 font-bold ${
+                fontSize === "xlarge"
+                  ? "text-2xl"
+                  : fontSize === "large"
+                  ? "text-xl"
+                  : "text-xl"
+              }`}
+            >
+              이음케어
+            </h1>
           </div>
 
-          {/* 나머지 헤더 코드 (알림 Popover 등) 그대로 유지 */}
           <div className="flex items-center gap-2">
+            {/* ✨ 글자 크기 조절 버튼 */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hover:bg-orange-50"
+                  title="글자 크기 조절"
+                >
+                  <Type
+                    className={`${
+                      fontSize === "xlarge"
+                        ? "w-7 h-7"
+                        : fontSize === "large"
+                        ? "w-6 h-6"
+                        : "w-5 h-5"
+                    }`}
+                  />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48" align="end">
+                <div className="space-y-2">
+                  <h3 className="font-medium text-sm text-gray-700 mb-3">
+                    글자 크기
+                  </h3>
+
+                  <button
+                    onClick={() => handleFontSizeChange("default")}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      fontSize === "default"
+                        ? "bg-orange-100 text-orange-700"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    <Type className="w-4 h-4" />
+                    <span className="text-sm">기본</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleFontSizeChange("large")}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      fontSize === "large"
+                        ? "bg-orange-100 text-orange-700 font-medium"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    <Type className="w-5 h-5" />
+                    <span className="text-base font-medium">크게</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleFontSizeChange("xlarge")}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      fontSize === "xlarge"
+                        ? "bg-orange-100 text-orange-700 font-semibold"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    <Type className="w-6 h-6" />
+                    <span className="text-lg font-semibold">아주 크게</span>
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* 알림 버튼 */}
             {user && (
               <Popover>
                 <PopoverTrigger asChild>
@@ -385,7 +522,6 @@ export default function App() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80" align="end">
-                  {/* ... 기존 PopoverContent 내용 그대로 ... */}
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="font-medium">최근 활동</h3>
@@ -478,6 +614,8 @@ export default function App() {
                 </PopoverContent>
               </Popover>
             )}
+
+            {/* 로그인/로그아웃 버튼 */}
             {user ? (
               <Button
                 variant="outline"
@@ -486,7 +624,9 @@ export default function App() {
                 className="border-orange-200 text-orange-600 hover:bg-orange-50"
               >
                 <LogOut className="w-4 h-4 mr-1" />
-                로그아웃
+                <span className={fontSize === "xlarge" ? "text-base" : ""}>
+                  로그아웃
+                </span>
               </Button>
             ) : (
               <Button
@@ -495,7 +635,9 @@ export default function App() {
                 onClick={() => setShowAuthDialog(true)}
                 className="border-orange-200 text-orange-600 hover:bg-orange-50"
               >
-                로그인
+                <span className={fontSize === "xlarge" ? "text-base" : ""}>
+                  로그인
+                </span>
               </Button>
             )}
           </div>
@@ -509,8 +651,7 @@ export default function App() {
             <NavButton tab="home" icon={Home} label="홈" />
             <NavButton tab="diary" icon={Calendar} label="공유 다이어리" />
             <NavButton tab="schedule" icon={Calendar} label="일정 관리" />
-            <NavButton tab="reminder" icon={Bell} label="약 알림" />{" "}
-            {/* ✨ 추가 */}
+            <NavButton tab="reminder" icon={Bell} label="약 알림" />
             <NavButton tab="community" icon={MessageCircle} label="커뮤니티" />
             <NavButton tab="family" icon={Users} label="가족 구성원" />
           </nav>
@@ -520,7 +661,7 @@ export default function App() {
         <main className="flex-1 p-4 md:p-6">{renderContent()}</main>
       </div>
 
-      {/* Bottom Navigation - Mobile (5개로 유지, 커뮤니티 제거하고 약 알림 추가) */}
+      {/* Bottom Navigation - Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-orange-100 px-4 py-2 z-10">
         <div className="flex items-center justify-around">
           <button
@@ -530,7 +671,11 @@ export default function App() {
             }`}
           >
             <Home className="w-5 h-5" />
-            <span className="text-xs">홈</span>
+            <span
+              className={`${fontSize === "xlarge" ? "text-sm" : "text-xs"}`}
+            >
+              홈
+            </span>
           </button>
           <button
             onClick={() => setActiveTab("diary")}
@@ -539,7 +684,11 @@ export default function App() {
             }`}
           >
             <Calendar className="w-5 h-5" />
-            <span className="text-xs">다이어리</span>
+            <span
+              className={`${fontSize === "xlarge" ? "text-sm" : "text-xs"}`}
+            >
+              다이어리
+            </span>
           </button>
           <button
             onClick={() => setActiveTab("schedule")}
@@ -548,9 +697,12 @@ export default function App() {
             }`}
           >
             <Calendar className="w-5 h-5" />
-            <span className="text-xs">일정</span>
+            <span
+              className={`${fontSize === "xlarge" ? "text-sm" : "text-xs"}`}
+            >
+              일정
+            </span>
           </button>
-          {/* ✨ 약 알림 추가 */}
           <button
             onClick={() => setActiveTab("reminder")}
             className={`flex flex-col items-center gap-1 p-2 ${
@@ -558,7 +710,11 @@ export default function App() {
             }`}
           >
             <Pill className="w-5 h-5" />
-            <span className="text-xs">약 알림</span>
+            <span
+              className={`${fontSize === "xlarge" ? "text-sm" : "text-xs"}`}
+            >
+              약 알림
+            </span>
           </button>
           <button
             onClick={() => setActiveTab("family")}
@@ -567,7 +723,11 @@ export default function App() {
             }`}
           >
             <Users className="w-5 h-5" />
-            <span className="text-xs">가족</span>
+            <span
+              className={`${fontSize === "xlarge" ? "text-sm" : "text-xs"}`}
+            >
+              가족
+            </span>
           </button>
         </div>
       </nav>

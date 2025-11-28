@@ -265,21 +265,37 @@ export class APIClient {
     return this.acceptInvite(invitationId);
   }
 
+  // ✨ [수정] 일정 완료 체크 + 시간 기록
   async toggleScheduleComplete(id: string, isCompleted: boolean) {
+    const updates: any = { is_completed: isCompleted };
+    // 체크할 때만 현재 시간 기록, 해제하면 시간 지움
+    if (isCompleted) {
+      updates.completed_at = new Date().toISOString();
+    } else {
+      updates.completed_at = null;
+    }
+
     const { error } = await supabase
       .from("schedules")
-      .update({ is_completed: isCompleted })
+      .update(updates)
       .eq("id", id);
 
     if (error) throw error;
     return { success: true };
   }
 
-  // ✨ [추가] 일기/약 완료 체크/해제 (토글)
+  // ✨ [수정] 일기 완료 체크 + 시간 기록
   async toggleDiaryComplete(id: string, isCompleted: boolean) {
+    const updates: any = { is_completed: isCompleted };
+    if (isCompleted) {
+      updates.completed_at = new Date().toISOString();
+    } else {
+      updates.completed_at = null;
+    }
+
     const { error } = await supabase
       .from("diary_entries")
-      .update({ is_completed: isCompleted })
+      .update(updates)
       .eq("id", id);
 
     if (error) throw error;
