@@ -1,20 +1,15 @@
 import { supabase } from "./auth";
 
 export class APIClient {
-  // 1. 토큰 관리 로직 제거 (Supabase가 알아서 관리함)
-  setAccessToken(token: string | null) {
-    // Supabase는 자동 로그인 관리가 되므로 이 함수는 비워둬도 되지만,
-    // 기존 코드와의 호환성을 위해 남겨둡니다.
-  }
+  // 1. 토큰 관리 (호환성 유지)
+  setAccessToken(token: string | null) {}
 
   // 2. Auth (회원가입)
   async signup(email: string, password: string, name: string) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { name },
-      },
+      options: { data: { name } },
     });
     if (error) throw error;
     return { data };
@@ -22,7 +17,6 @@ export class APIClient {
 
   // 3. Diaries (다이어리)
   async createDiary(elderlyCareRecipientName: string) {
-    // 현재 유저 확인
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -51,9 +45,8 @@ export class APIClient {
       .from("diaries")
       .select("*")
       .eq("owner_id", user.id)
-      .single(); // 하나만 가져오기
+      .single();
 
-    // 다이어리가 없으면 null 반환 (에러 아님)
     if (error && error.code !== "PGRST116") console.error(error);
     return { data };
   }
@@ -67,15 +60,9 @@ export class APIClient {
   ) {
     const { data, error } = await supabase
       .from("diary_entries")
-      .insert({
-        type,
-        title,
-        content,
-        image_url: imageUrl,
-      })
+      .insert({ type, title, content, image_url: imageUrl })
       .select()
       .single();
-
     if (error) throw error;
     return { data };
   }
@@ -85,7 +72,6 @@ export class APIClient {
       .from("diary_entries")
       .select("*")
       .order("created_at", { ascending: false });
-
     if (error) throw error;
     return { data };
   }
@@ -96,7 +82,6 @@ export class APIClient {
       .select("*")
       .eq("id", entryId)
       .single();
-
     if (error) throw error;
     return { data };
   }
@@ -106,14 +91,12 @@ export class APIClient {
       .from("diary_entries")
       .delete()
       .eq("id", entryId);
-
     if (error) throw error;
     return { success: true };
   }
 
   // 5. Schedules (일정 관리)
   async addSchedule(schedule: any) {
-    // user_id는 Supabase가 자동으로 처리하거나 RLS로 처리됨
     const { data, error } = await supabase
       .from("schedules")
       .insert({
@@ -124,11 +107,9 @@ export class APIClient {
         notes: schedule.notes,
         category: schedule.category,
         reminder: schedule.reminder,
-        // author_name은 선택사항 (유저 메타데이터에서 가져오거나 생략 가능)
       })
       .select()
       .single();
-
     if (error) throw error;
     return { data };
   }
@@ -138,7 +119,6 @@ export class APIClient {
       .from("schedules")
       .select("*")
       .order("date", { ascending: true });
-
     if (error) throw error;
     return { data };
   }
@@ -149,7 +129,6 @@ export class APIClient {
       .select("*")
       .eq("id", scheduleId)
       .single();
-
     if (error) throw error;
     return { data };
   }
@@ -159,7 +138,6 @@ export class APIClient {
       .from("schedules")
       .delete()
       .eq("id", scheduleId);
-
     if (error) throw error;
     return { success: true };
   }
@@ -171,7 +149,6 @@ export class APIClient {
       .insert({ title, content, category })
       .select()
       .single();
-
     if (error) throw error;
     return { data };
   }
@@ -181,30 +158,111 @@ export class APIClient {
       .from("posts")
       .select("*")
       .order("created_at", { ascending: false });
-
     if (error) throw error;
     return { data };
   }
 
   async likePost(postId: string) {
-    // 좋아요 로직은 복잡할 수 있으므로, 일단 간단히 구현하거나 RPC 호출 필요
-    // 여기서는 예시로 빈 응답만 보냅니다.
     return { data: { success: true } };
   }
 
-  // 7. Family Members (가족)
+  // 7. Family Members (가족 & 초대)
   async getFamilyMembers() {
-    // 가족 구성원 로직도 DB 구조에 따라 다릅니다.
-    // 일단 빈 배열 반환하도록 처리
-    return { data: [] };
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || !user.email) return { data: [] };
+
+    // 1. 내가 초대를 보냈는데 상대가 수락한 경우
+    const { data: sentInvites } = await supabase
+      .from("invitations")
+      .select("receiver_email")
+      .eq("sender_email", user.email)
+      .eq("status", "accepted");
+
+    // 2. 내가 초대를 받았는데 내가 수락한 경우
+    const { data: receivedInvites } = await supabase
+      .from("invitations")
+      .select("sender_email")
+      .eq("receiver_email", user.email)
+      .eq("status", "accepted");
+
+    // 목록 합치기
+    const familyEmails = [
+      ...(sentInvites?.map((i) => i.receiver_email) || []),
+      ...(receivedInvites?.map((i) => i.sender_email) || []),
+    ];
+
+    // 중복 제거
+    const uniqueEmails = [...new Set(familyEmails)];
+
+    // 화면에 보여줄 형태로 가공
+    const members = uniqueEmails.map((email, index) => ({
+      id: `member-${index}`,
+      name: email, // 이름 정보가 따로 없어서 이메일로 표시
+      email: email,
+      role: "가족",
+      joinedAt: new Date().toISOString(), // 가입일 정보가 없으면 현재 시간
+    }));
+
+    return { data: members };
   }
 
+  async getInvitations() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || !user.email) return { data: [] };
+
+    const { data, error } = await supabase
+      .from("invitations")
+      .select("*")
+      .eq("receiver_email", user.email) // 내 이메일로 온 것만
+      .eq("status", "pending"); // 대기중인 것만
+
+    if (error) {
+      console.error("초대장 불러오기 실패:", error);
+      return { data: [] };
+    }
+    return { data };
+  }
+
+  // ✨ [수정] 초대장 진짜로 보내기 (DB에 저장)
+  async sendInvitation(email: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || !user.email) throw new Error("로그인이 필요합니다");
+
+    // DB에 저장
+    const { error } = await supabase.from("invitations").insert({
+      sender_email: user.email, // 보낸 사람
+      receiver_email: email, // 받는 사람
+    });
+
+    if (error) throw error;
+    return { success: true };
+  }
+
+  // (이름 호환용)
   async inviteMember(email: string) {
-    return { data: { success: true } };
+    return this.sendInvitation(email);
   }
 
-  async acceptInvite(token: string) {
-    return { data: { success: true } };
+  // ✨ [수정] 초대 수락하기
+  async acceptInvite(invitationId: string) {
+    // 상태를 'accepted'로 변경
+    const { error } = await supabase
+      .from("invitations")
+      .update({ status: "accepted" })
+      .eq("id", invitationId);
+
+    if (error) throw error;
+    return { success: true };
+  }
+
+  async acceptInvitation(invitationId: string) {
+    return this.acceptInvite(invitationId);
   }
 }
 

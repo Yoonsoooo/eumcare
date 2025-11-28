@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Calendar, X, ImageIcon } from "lucide-react"; // 아이콘 추가
+import { Plus, Trash2, Calendar, X, ImageIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from "./ui/select";
 
-// 인터페이스 정의
 interface DiaryEntry {
   id: string;
   type: string;
@@ -40,7 +39,6 @@ export function SharedDiary() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // ✨ [추가] 상세보기용 State
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
@@ -85,7 +83,6 @@ export function SharedDiary() {
     }
   }
 
-  // ✨ [추가] 삭제 핸들러
   const handleDelete = async () => {
     if (!selectedEntry) return;
     if (confirm("정말 이 일기를 삭제하시겠습니까?")) {
@@ -100,14 +97,33 @@ export function SharedDiary() {
     }
   };
 
-  const getTypeLabel = (type: string) =>
-    type === "meal"
-      ? "식사"
-      : type === "health"
-      ? "건강"
-      : type === "sleep"
-      ? "수면"
-      : "기타";
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "meal":
+        return "식사";
+      case "medicine":
+        return "약 복용"; // health -> medicine 으로 변경
+      case "health":
+        return "건강"; // 기존 데이터 호환용
+      case "sleep":
+        return "수면";
+    }
+  };
+
+  // ✨ 타입별 색상 (따뜻한 톤으로 변경)
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case "meal":
+        return "bg-orange-100 text-orange-700";
+      case "medicine": // health -> medicine 으로 변경
+      case "health": // 기존 데이터 호환용
+        return "bg-rose-100 text-rose-700";
+      case "sleep":
+        return "bg-amber-100 text-amber-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
@@ -115,7 +131,8 @@ export function SharedDiary() {
         <h2 className="text-xl font-bold">공유 다이어리</h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            {/* ✨ 버튼 색상 변경 */}
+            <Button className="bg-orange-500 hover:bg-orange-600">
               <Plus className="mr-2 h-4 w-4" /> 작성하기
             </Button>
           </DialogTrigger>
@@ -134,15 +151,16 @@ export function SharedDiary() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="meal">식사</SelectItem>
-                    <SelectItem value="health">건강</SelectItem>
-                    <SelectItem value="sleep">수면</SelectItem>
+                    <SelectItem value="meal">🍽️ 식사</SelectItem>
+                    <SelectItem value="health">💊 약 복용</SelectItem>
+                    <SelectItem value="sleep">😴 수면</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>제목</Label>
                 <Input
+                  placeholder="제목을 입력하세요"
                   value={newEntry.title}
                   onChange={(e) =>
                     setNewEntry({ ...newEntry, title: e.target.value })
@@ -152,13 +170,18 @@ export function SharedDiary() {
               <div>
                 <Label>내용</Label>
                 <Textarea
+                  placeholder="내용을 입력하세요"
                   value={newEntry.content}
                   onChange={(e) =>
                     setNewEntry({ ...newEntry, content: e.target.value })
                   }
                 />
               </div>
-              <Button onClick={handleAddEntry} className="w-full">
+              {/* ✨ 저장 버튼 색상 변경 */}
+              <Button
+                onClick={handleAddEntry}
+                className="w-full bg-orange-500 hover:bg-orange-600"
+              >
                 저장
               </Button>
             </div>
@@ -166,40 +189,55 @@ export function SharedDiary() {
         </Dialog>
       </div>
 
+      {/* 일기 목록 */}
       <div className="grid gap-4 md:grid-cols-2">
-        {entries.map((entry) => (
-          <Card
-            key={entry.id}
-            // ✨ [수정] 카드 클릭 이벤트
-            className="cursor-pointer hover:shadow-md transition-all"
-            onClick={() => {
-              setSelectedEntry(entry);
-              setIsDetailOpen(true);
-            }}
-          >
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                    {getTypeLabel(entry.type)}
-                  </span>
-                  <CardTitle className="text-lg mt-2">{entry.title}</CardTitle>
-                </div>
-                <span className="text-xs text-gray-500">
-                  {new Date(entry.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 line-clamp-2">
-                {entry.content}
-              </p>
+        {entries.length === 0 ? (
+          <Card className="col-span-full">
+            <CardContent className="p-8 text-center text-gray-500">
+              아직 작성된 일기가 없습니다.
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          entries.map((entry) => (
+            <Card
+              key={entry.id}
+              className="cursor-pointer hover:shadow-md hover:border-orange-200 transition-all"
+              onClick={() => {
+                setSelectedEntry(entry);
+                setIsDetailOpen(true);
+              }}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    {/* ✨ 타입 뱃지 색상 동적 적용 */}
+                    <span
+                      className={`text-xs font-medium px-2 py-1 rounded-full ${getTypeColor(
+                        entry.type
+                      )}`}
+                    >
+                      {getTypeLabel(entry.type)}
+                    </span>
+                    <CardTitle className="text-lg mt-2">
+                      {entry.title}
+                    </CardTitle>
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {new Date(entry.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 line-clamp-2">
+                  {entry.content}
+                </p>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
-      {/* ✨ [추가] 상세 팝업 */}
+      {/* 상세 팝업 */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -208,9 +246,14 @@ export function SharedDiary() {
 
           {selectedEntry && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between border-b pb-4">
+              <div className="flex items-center justify-between border-b border-orange-100 pb-4">
                 <div>
-                  <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                  {/* ✨ 타입 뱃지 색상 동적 적용 */}
+                  <span
+                    className={`text-xs font-medium px-2 py-1 rounded-full ${getTypeColor(
+                      selectedEntry.type
+                    )}`}
+                  >
                     {getTypeLabel(selectedEntry.type)}
                   </span>
                   <h2 className="text-2xl font-bold mt-2">
@@ -226,23 +269,31 @@ export function SharedDiary() {
               </div>
 
               <div className="min-h-[100px] text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {selectedEntry.content}
+                {selectedEntry.content || (
+                  <span className="text-gray-400">내용이 없습니다.</span>
+                )}
               </div>
 
               {selectedEntry.image_url && (
-                <div className="rounded-lg overflow-hidden border">
-                  {/* 이미지 표시 로직 (Supabase Storage 사용 시 src 수정 필요) */}
-                  <div className="bg-gray-100 h-40 flex items-center justify-center text-gray-400">
+                <div className="rounded-lg overflow-hidden border border-orange-100">
+                  <div className="bg-orange-50 h-40 flex items-center justify-center text-orange-300">
                     <ImageIcon className="h-8 w-8 mr-2" /> 이미지
                   </div>
                 </div>
               )}
 
-              <DialogFooter>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDetailOpen(false)}
+                  className="flex-1"
+                >
+                  닫기
+                </Button>
                 <Button
                   variant="destructive"
                   onClick={handleDelete}
-                  className="w-full"
+                  className="flex-1"
                 >
                   <Trash2 className="mr-2 h-4 w-4" /> 삭제하기
                 </Button>

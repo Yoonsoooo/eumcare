@@ -61,7 +61,6 @@ export default function App() {
       const { user } = await getCurrentUser();
       setUser(user);
 
-      // Check if user has a diary
       try {
         const { data } = await apiClient.getMyDiary();
         if (data) {
@@ -97,9 +96,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-orange-50/30 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          {/* ✨ 로딩 스피너 색상 변경 */}
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
           <p className="mt-4 text-gray-600">로딩 중...</p>
         </div>
       </div>
@@ -139,8 +139,8 @@ export default function App() {
       }}
       className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
         activeTab === tab
-          ? "bg-blue-50 text-blue-600"
-          : "text-gray-600 hover:bg-gray-50"
+          ? "bg-orange-50 text-orange-600" // ✨ 활성 탭 색상 변경
+          : "text-gray-600 hover:bg-orange-50/50" // ✨ 호버 색상 변경
       }`}
     >
       <Icon className="w-5 h-5" />
@@ -149,9 +149,13 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-orange-50/30">
+      {" "}
+      {/* ✨ 배경색 변경 */}
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <header className="bg-white border-b border-orange-100 sticky top-0 z-10">
+        {" "}
+        {/* ✨ 테두리 색상 변경 */}
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -178,13 +182,18 @@ export default function App() {
                 </div>
               </SheetContent>
             </Sheet>
-            <h1 className="text-blue-600">이음케어</h1>
+            {/* ✨ 로고 색상 변경 */}
+            <h1 className="text-orange-600 font-bold text-xl">이음케어</h1>
           </div>
           <div className="flex items-center gap-2">
             {user && (
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hover:bg-orange-50"
+                  >
                     <Bell className="w-5 h-5" />
                   </Button>
                 </PopoverTrigger>
@@ -197,14 +206,16 @@ export default function App() {
                           key={activity.id}
                           className="flex items-start gap-3 pb-3 border-b last:border-0"
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-sm text-blue-600">
+                          {/* ✨ 아바타 배경색 변경 */}
+                          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                            <span className="text-sm text-orange-600">
                               {activity.member[0]}
                             </span>
                           </div>
                           <div className="flex-1">
                             <p className="text-sm">
-                              <span className="text-blue-600">
+                              {/* ✨ 멤버 이름 색상 변경 */}
+                              <span className="text-orange-600 font-medium">
                                 {activity.member}
                               </span>
                               님이 {activity.action}했습니다
@@ -221,7 +232,12 @@ export default function App() {
               </Popover>
             )}
             {user ? (
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                className="border-orange-200 text-orange-600 hover:bg-orange-50"
+              >
                 <LogOut className="w-4 h-4 mr-1" />
                 로그아웃
               </Button>
@@ -230,6 +246,7 @@ export default function App() {
                 variant="outline"
                 size="sm"
                 onClick={() => setShowAuthDialog(true)}
+                className="border-orange-200 text-orange-600 hover:bg-orange-50"
               >
                 로그인
               </Button>
@@ -237,10 +254,9 @@ export default function App() {
           </div>
         </div>
       </header>
-
       <div className="flex max-w-7xl mx-auto">
         {/* Sidebar - Desktop */}
-        <aside className="hidden md:block w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-73px)] p-4">
+        <aside className="hidden md:block w-64 bg-white border-r border-orange-100 min-h-[calc(100vh-73px)] p-4">
           <nav className="flex flex-col gap-2">
             <NavButton tab="home" icon={Home} label="홈" />
             <NavButton tab="diary" icon={Calendar} label="공유 다이어리" />
@@ -253,14 +269,13 @@ export default function App() {
         {/* Main Content */}
         <main className="flex-1 p-4 md:p-6">{renderContent()}</main>
       </div>
-
       {/* Bottom Navigation - Mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-10">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-orange-100 px-4 py-2 z-10">
         <div className="flex items-center justify-around">
           <button
             onClick={() => setActiveTab("home")}
             className={`flex flex-col items-center gap-1 p-2 ${
-              activeTab === "home" ? "text-blue-600" : "text-gray-600"
+              activeTab === "home" ? "text-orange-600" : "text-gray-400"
             }`}
           >
             <Home className="w-5 h-5" />
@@ -269,7 +284,7 @@ export default function App() {
           <button
             onClick={() => setActiveTab("diary")}
             className={`flex flex-col items-center gap-1 p-2 ${
-              activeTab === "diary" ? "text-blue-600" : "text-gray-600"
+              activeTab === "diary" ? "text-orange-600" : "text-gray-400"
             }`}
           >
             <Calendar className="w-5 h-5" />
@@ -278,7 +293,7 @@ export default function App() {
           <button
             onClick={() => setActiveTab("schedule")}
             className={`flex flex-col items-center gap-1 p-2 ${
-              activeTab === "schedule" ? "text-blue-600" : "text-gray-600"
+              activeTab === "schedule" ? "text-orange-600" : "text-gray-400"
             }`}
           >
             <Calendar className="w-5 h-5" />
@@ -287,7 +302,7 @@ export default function App() {
           <button
             onClick={() => setActiveTab("community")}
             className={`flex flex-col items-center gap-1 p-2 ${
-              activeTab === "community" ? "text-blue-600" : "text-gray-600"
+              activeTab === "community" ? "text-orange-600" : "text-gray-400"
             }`}
           >
             <MessageCircle className="w-5 h-5" />
@@ -296,7 +311,7 @@ export default function App() {
           <button
             onClick={() => setActiveTab("family")}
             className={`flex flex-col items-center gap-1 p-2 ${
-              activeTab === "family" ? "text-blue-600" : "text-gray-600"
+              activeTab === "family" ? "text-orange-600" : "text-gray-400"
             }`}
           >
             <Users className="w-5 h-5" />
@@ -304,20 +319,17 @@ export default function App() {
           </button>
         </div>
       </nav>
-
       {/* Auth Dialog */}
       <AuthDialog
         open={showAuthDialog}
         onOpenChange={setShowAuthDialog}
         onAuthSuccess={handleAuthSuccess}
       />
-
       {/* Onboarding Dialog */}
       <OnboardingDialog
         open={showOnboarding}
         onDiaryCreated={handleDiaryCreated}
       />
-
       {/* Toaster */}
       <Toaster />
     </div>
