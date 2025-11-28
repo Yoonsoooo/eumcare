@@ -207,10 +207,9 @@ export function SharedDiary() {
                 setIsDetailOpen(true);
               }}
             >
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    {/* ✨ 타입 뱃지 색상 동적 적용 */}
                     <span
                       className={`text-xs font-medium px-2 py-1 rounded-full ${getTypeColor(
                         entry.type
@@ -227,7 +226,11 @@ export function SharedDiary() {
                   </span>
                 </div>
               </CardHeader>
-              <CardContent>
+
+              {/* ✨ 구분선 추가 */}
+              <div className="h-px bg-orange-100 mx-4" />
+
+              <CardContent className="pt-3">
                 <p className="text-sm text-gray-600 line-clamp-2">
                   {entry.content}
                 </p>
