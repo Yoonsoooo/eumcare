@@ -10,6 +10,8 @@ import {
   ChevronDown,
   Clock,
   Moon,
+  CheckCircle2, // ✨ 체크 완료 아이콘
+  Circle, // ✨ 체크 전 아이콘
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -28,6 +30,7 @@ interface WeeklyItem {
   type: "schedule" | "diary";
   category?: string;
   content?: string;
+  is_completed: boolean; // ✨ 완료 여부 추가
 }
 
 interface DashboardProps {
@@ -66,16 +69,18 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           time: s.time,
           type: "schedule" as const,
           category: s.category,
-          content: s.notes || s.title, // ✨ 메모가 없으면 제목을 내용으로 사용
+          content: s.notes,
+          is_completed: s.is_completed || false, // ✨ DB값 가져오기
         })),
         ...(diaryEntries || []).map((d: any) => ({
           id: d.id,
-          title: d.title,
+          title: d.title || d.content,
           date: new Date(d.created_at).toISOString().split("T")[0],
           time: new Date(d.created_at).toTimeString().slice(0, 5),
           type: "diary" as const,
           category: d.type,
-          content: d.content || d.title, // ✨ 내용이 없으면 제목을 내용으로 사용
+          content: d.title === d.content ? "" : d.content,
+          is_completed: d.is_completed || false, // ✨ DB값 가져오기
         })),
       ].sort((a, b) => {
         const dateA = new Date(a.date + " " + a.time);
@@ -89,6 +94,40 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
   }
 
+  // ✨ [핵심 기능] 완료 체크 토글 핸들러
+  const handleToggleComplete = async (
+    e: React.MouseEvent,
+    item: WeeklyItem
+  ) => {
+    e.stopPropagation(); // 카드 클릭 이벤트 방지 (체크만 되게)
+
+    // 1. 화면에서 먼저 즉시 변경 (낙관적 업데이트)
+    const newStatus = !item.is_completed;
+    setWeeklyItems((prev) =>
+      prev.map((i) =>
+        i.id === item.id ? { ...i, is_completed: newStatus } : i
+      )
+    );
+
+    try {
+      // 2. 서버에 저장
+      if (item.type === "schedule") {
+        await apiClient.toggleScheduleComplete(item.id, newStatus);
+      } else {
+        await apiClient.toggleDiaryComplete(item.id, newStatus);
+      }
+
+      if (newStatus) {
+        toast.success("완료 체크되었습니다! 👍");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("변경 실패");
+      loadWeeklyData(); // 실패 시 원상복구
+    }
+  };
+
+  // ... (handleOpenDialog, handleAddEntry 기존과 동일) ...
   const handleOpenDialog = (
     type: "meal" | "medicine" | "schedule" | "sleep"
   ) => {
@@ -105,7 +144,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
 
   const handleAddEntry = async () => {
     if (dialogType === "schedule") {
-      if (!newEntry.title || !newEntry.date || !newEntry.time) return;
+      if (!newEntry.title) return;
       try {
         await apiClient.addSchedule({
           title: newEntry.title,
@@ -113,17 +152,16 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           time: newEntry.time,
           category: "other",
           reminder: true,
-          location: "",
           notes: newEntry.content,
         });
         setIsDialogOpen(false);
-        toast.success("일정이 추가되었습니다!");
+        toast.success("추가되었습니다!");
         loadWeeklyData();
       } catch (error) {
         toast.error("실패했습니다");
       }
     } else {
-      if (!newEntry.date || !newEntry.time || !newEntry.content) return;
+      if (!newEntry.content) return;
       try {
         const titleToSave = newEntry.content;
         await apiClient.addDiaryEntry(
@@ -230,35 +268,76 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   onClick={() =>
                     onNavigate?.(item.type === "diary" ? "diary" : "schedule")
                   }
-                  className="flex items-start gap-3 p-4 bg-orange-50/50 rounded-xl hover:bg-orange-100/50 transition-colors cursor-pointer"
+                  className={`flex items-center gap-3 p-4 rounded-xl transition-colors cursor-pointer border ${
+                    item.is_completed
+                      ? "bg-green-50 border-green-100" // ✨ 완료되면 초록색 배경
+                      : "bg-white border-orange-100 hover:bg-orange-50/50"
+                  }`}
                 >
+                  {/* 1. 아이콘 */}
                   <div
-                    className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-1 ${getBackgroundColor(
-                      item.type,
-                      item.category
-                    )}`}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      item.is_completed
+                        ? "bg-green-100"
+                        : getBackgroundColor(item.type, item.category)
+                    }`}
                   >
-                    {getIcon(item.type, item.category)}
+                    {/* 완료되면 체크 아이콘, 아니면 원래 아이콘 */}
+                    {item.is_completed ? (
+                      <CheckCircle2 className="w-6 h-6 text-green-600" />
+                    ) : (
+                      getIcon(item.type, item.category)
+                    )}
                   </div>
 
+                  {/* 2. 내용 */}
                   <div className="flex-1 min-w-0">
-                    {/* 카테고리 & 날짜 */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="px-2 py-0.5 text-xs bg-white rounded border border-orange-200 text-orange-700 whitespace-nowrap">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded border whitespace-nowrap ${
+                          item.is_completed
+                            ? "bg-green-100 text-green-700 border-green-200"
+                            : "bg-white text-orange-700 border-orange-200"
+                        }`}
+                      >
                         {getCategoryLabel(item.type, item.category)}
                       </span>
                       <span className="text-xs text-gray-500">{item.date}</span>
                     </div>
-
-                    {/* ✨ 내용만 표시 (제목 제거) */}
-                    <p className="text-gray-900 line-clamp-2 break-words">
-                      {item.content}
-                    </p>
+                    <h4
+                      className={`font-medium truncate ${
+                        item.is_completed
+                          ? "text-gray-400 line-through"
+                          : "text-gray-900"
+                      }`}
+                    >
+                      {item.title}
+                    </h4>
+                    {item.content && item.content !== item.title && (
+                      <p className="text-sm text-gray-500 mt-1 line-clamp-1">
+                        {item.content}
+                      </p>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1 text-sm text-gray-500 font-medium bg-white px-2 py-1 rounded-lg border border-orange-100 whitespace-nowrap shrink-0">
-                    <Clock className="w-3 h-3" />
-                    {item.time}
+                  {/* 3. 시간 및 체크 버튼 */}
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-1 text-sm text-gray-500 font-medium bg-white px-2 py-1 rounded-lg border border-orange-100 whitespace-nowrap">
+                      <Clock className="w-3 h-3" />
+                      {item.time}
+                    </div>
+
+                    {/* ✨ 여기가 '어르신 전용 원터치 버튼' 입니다! */}
+                    <button
+                      onClick={(e) => handleToggleComplete(e, item)}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      {item.is_completed ? (
+                        <CheckCircle2 className="w-8 h-8 text-green-500 fill-green-100" />
+                      ) : (
+                        <Circle className="w-8 h-8 text-gray-300 hover:text-orange-400" />
+                      )}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -266,14 +345,12 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               {weeklyItems.length > 4 && (
                 <Button
                   variant="ghost"
-                  className="w-full text-orange-600 hover:bg-orange-50"
+                  className="w-full text-orange-600"
                   onClick={() => setShowAll(!showAll)}
                 >
                   {showAll ? "접기" : `더보기 (${weeklyItems.length - 4}개)`}
                   <ChevronDown
-                    className={`w-4 h-4 ml-2 transition-transform ${
-                      showAll ? "rotate-180" : ""
-                    }`}
+                    className={`w-4 h-4 ml-2 ${showAll ? "rotate-180" : ""}`}
                   />
                 </Button>
               )}
@@ -301,7 +378,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <div className="space-y-2">
                 <Label>제목</Label>
                 <Input
-                  placeholder="일정 제목을 입력하세요"
                   value={newEntry.title}
                   onChange={(e) =>
                     setNewEntry({ ...newEntry, title: e.target.value })
@@ -334,15 +410,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
             <div className="space-y-2">
               <Label>{dialogType === "schedule" ? "메모" : "내용"}</Label>
               <Textarea
-                placeholder={
-                  dialogType === "meal"
-                    ? "오늘 드신 음식을 기록해주세요"
-                    : dialogType === "medicine"
-                    ? "복용한 약을 기록해주세요"
-                    : dialogType === "sleep"
-                    ? "수면 상태를 기록해주세요"
-                    : "메모를 입력하세요"
-                }
                 rows={4}
                 value={newEntry.content}
                 onChange={(e) =>

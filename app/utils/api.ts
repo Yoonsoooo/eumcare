@@ -264,6 +264,27 @@ export class APIClient {
   async acceptInvitation(invitationId: string) {
     return this.acceptInvite(invitationId);
   }
+
+  async toggleScheduleComplete(id: string, isCompleted: boolean) {
+    const { error } = await supabase
+      .from("schedules")
+      .update({ is_completed: isCompleted })
+      .eq("id", id);
+
+    if (error) throw error;
+    return { success: true };
+  }
+
+  // ✨ [추가] 일기/약 완료 체크/해제 (토글)
+  async toggleDiaryComplete(id: string, isCompleted: boolean) {
+    const { error } = await supabase
+      .from("diary_entries")
+      .update({ is_completed: isCompleted })
+      .eq("id", id);
+
+    if (error) throw error;
+    return { success: true };
+  }
 }
 
 export const apiClient = new APIClient();
