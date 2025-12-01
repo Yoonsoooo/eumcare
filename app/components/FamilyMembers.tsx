@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Mail,
   MoreVertical,
   UserPlus,
   Share2,
-  Search,
   Bell,
+  Phone,
+  Calendar,
+  FileText,
+  Activity,
+  X,
+  Heart,
+  Pill,
+  MessageSquare,
+  Moon,
+  Utensils,
+  Users,
+  Camera,
+  Upload,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -20,16 +32,28 @@ import {
 } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
-import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { apiClient } from "../utils/api";
 import { toast } from "sonner";
+
+interface MemberActivity {
+  mealCount: number;
+  scheduleCount: number;
+  medicationCount: number;
+  sleepCount: number;
+  communityCount: number;
+  lastActiveAt: string | null;
+}
 
 interface Member {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  profileImage?: string;
   isOwner: boolean;
   joinedDate: string;
+  activity?: MemberActivity;
 }
 
 interface Invitation {
@@ -39,6 +63,8 @@ interface Invitation {
   diaryName: string;
   createdAt: string;
   status: "pending" | "accepted" | "declined";
+  sender_email?: string;
+  created_at?: string;
 }
 
 export function FamilyMembers() {
@@ -48,7 +74,17 @@ export function FamilyMembers() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [isInvitationsDialogOpen, setIsInvitationsDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
+
+  // ✨ 구성원 상세 정보 모달
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [isMemberDetailOpen, setIsMemberDetailOpen] = useState(false);
+
+  // ✨ 프로필 사진 업로드
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     loadMembers();
@@ -80,9 +116,14 @@ export function FamilyMembers() {
 
     setSearchLoading(true);
     try {
-      await apiClient.sendInvitation(inviteEmail);
-      toast.success(`${inviteEmail}님에게 초대를 보냈습니다!`);
+      await apiClient.sendInvitation(inviteEmail, {
+        name: inviteName,
+        phone: invitePhone,
+      });
+      toast.success(`${inviteName || inviteEmail}님에게 초대를 보냈습니다!`);
       setInviteEmail("");
+      setInvitePhone("");
+      setInviteName("");
       setIsInviteDialogOpen(false);
     } catch (error: any) {
       console.error("Failed to invite member:", error);
@@ -125,22 +166,113 @@ export function FamilyMembers() {
     toast.success("초대 링크가 복사되었습니다!");
   };
 
+  const handleMemberClick = (member: Member) => {
+    setSelectedMember(member);
+    setIsMemberDetailOpen(true);
+  };
+
+  // ✨ 프로필 사진 업로드 핸들러
+  const handlePhotoUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedMember) return;
+
+    // 파일 크기 체크 (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("파일 크기는 5MB 이하여야 합니다");
+      return;
+    }
+
+    // 이미지 파일인지 체크
+    if (!file.type.startsWith("image/")) {
+      toast.error("이미지 파일만 업로드 가능합니다");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+      formData.append("memberId", selectedMember.id);
+
+      await apiClient.uploadMemberPhoto(selectedMember.id, formData);
+
+      // 로컬 상태 업데이트 (미리보기)
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        setSelectedMember({ ...selectedMember, profileImage: imageUrl });
+        setMembers(
+          members.map((m) =>
+            m.id === selectedMember.id ? { ...m, profileImage: imageUrl } : m
+          )
+        );
+      };
+      reader.readAsDataURL(file);
+
+      toast.success("프로필 사진이 업데이트되었습니다!");
+    } catch (error) {
+      console.error("Failed to upload photo:", error);
+      toast.error("사진 업로드에 실패했습니다");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const pendingInvitations = invitations.filter(
     (inv) => inv.status === "pending"
   );
 
-  function getTimeAgo(createdAt: string) {
+  // 전화번호 포맷팅
+  const formatPhoneNumber = (phone: string) => {
+    if (!phone) return "-";
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.length === 11) {
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 7)}-${cleaned.slice(
+        7
+      )}`;
+    }
+    return phone;
+  };
+
+  // 날짜 포맷팅
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  // 마지막 활동 시간
+  const getLastActiveText = (lastActiveAt: string | null) => {
+    if (!lastActiveAt) return "활동 기록 없음";
     const now = new Date();
-    const created = new Date(createdAt);
-    const diffMs = now.getTime() - created.getTime();
+    const lastActive = new Date(lastActiveAt);
+    const diffMs = now.getTime() - lastActive.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffHours < 1) return "방금 전";
-    if (diffHours < 24) return `${diffHours}시간 전`;
-    if (diffDays === 1) return "어제";
-    return `${diffDays}일 전`;
-  }
+    if (diffHours < 1) return "방금 전 활동";
+    if (diffHours < 24) return `${diffHours}시간 전 활동`;
+    if (diffDays === 1) return "어제 활동";
+    return `${diffDays}일 전 활동`;
+  };
+
+  // ✨ 총 활동 계산
+  const getTotalActivity = (activity?: MemberActivity) => {
+    if (!activity) return 0;
+    return (
+      (activity.mealCount || 0) +
+      (activity.scheduleCount || 0) +
+      (activity.medicationCount || 0) +
+      (activity.sleepCount || 0) +
+      (activity.communityCount || 0)
+    );
+  };
 
   return (
     <div className="space-y-4 pb-20 md:pb-6">
@@ -159,7 +291,6 @@ export function FamilyMembers() {
               >
                 <Bell className="w-4 h-4 mr-2" />
                 받은 초대
-                {/* ✨ 알림 뱃지 */}
                 {pendingInvitations.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                     {pendingInvitations.length}
@@ -206,7 +337,10 @@ export function FamilyMembers() {
                             <p className="text-xs text-gray-400 mt-1">
                               {Math.floor(
                                 (new Date().getTime() -
-                                  new Date(invitation.created_at).getTime()) /
+                                  new Date(
+                                    invitation.created_at ||
+                                      invitation.createdAt
+                                  ).getTime()) /
                                   (1000 * 60 * 60 * 24)
                               )}
                               일 전
@@ -261,15 +395,45 @@ export function FamilyMembers() {
                 {/* ✨ 안내 문구 */}
                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
                   <p className="text-sm text-orange-800">
-                    💡 초대할 가족의 이메일 주소를 입력하세요. 상대방이
-                    이음케어에 가입되어 있어야 초대할 수 있습니다.
+                    💡 초대할 가족의 정보를 입력하세요. 이메일은 필수이며,
+                    상대방이 이음케어에 가입되어 있어야 초대할 수 있습니다.
                   </p>
                 </div>
 
+                {/* 이름 입력 */}
                 <div className="space-y-2">
-                  <Label className="text-gray-700">이메일 주소</Label>
+                  <Label className="text-gray-700">이름</Label>
+                  <Input
+                    type="text"
+                    placeholder="홍길동"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    className="border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                  />
+                </div>
+
+                {/* 전화번호 입력 */}
+                <div className="space-y-2">
+                  <Label className="text-gray-700">전화번호</Label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                    <Input
+                      type="tel"
+                      placeholder="010-1234-5678"
+                      value={invitePhone}
+                      onChange={(e) => setInvitePhone(e.target.value)}
+                      className="pl-10 border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                    />
+                  </div>
+                </div>
+
+                {/* 이메일 입력 */}
+                <div className="space-y-2">
+                  <Label className="text-gray-700">
+                    이메일 주소 <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
                     <Input
                       type="email"
                       placeholder="example@email.com"
@@ -350,18 +514,25 @@ export function FamilyMembers() {
           members.map((member) => (
             <Card
               key={member.id}
-              className="border-orange-100 hover:border-orange-200 hover:shadow-md transition-all"
+              className="border-orange-100 hover:border-orange-200 hover:shadow-md transition-all cursor-pointer"
+              onClick={() => handleMemberClick(member)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-12 h-12">
+                    {member.profileImage ? (
+                      <AvatarImage
+                        src={member.profileImage}
+                        alt={member.name}
+                      />
+                    ) : null}
                     <AvatarFallback className="bg-orange-100 text-orange-600 font-medium">
                       {member.name[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-gray-900 font-medium">
+                      <h3 className="text-gray-900 font-semibold text-base">
                         {member.name}
                       </h3>
                       {member.isOwner && (
@@ -370,7 +541,12 @@ export function FamilyMembers() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
+                    {/* ✨ 전화번호와 이메일 세로 배치 */}
+                    <div className="flex flex-col gap-1 mt-1.5 text-sm text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-orange-400" />
+                        <span>{formatPhoneNumber(member.phone || "")}</span>
+                      </div>
                       <div className="flex items-center gap-1">
                         <Mail className="w-3 h-3 text-orange-400" />
                         <span>{member.email}</span>
@@ -381,6 +557,10 @@ export function FamilyMembers() {
                     variant="ghost"
                     size="icon"
                     className="hover:bg-orange-50 hover:text-orange-600"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMemberClick(member);
+                    }}
                   >
                     <MoreVertical className="w-4 h-4" />
                   </Button>
@@ -391,35 +571,292 @@ export function FamilyMembers() {
         )}
       </div>
 
-      {/* Statistics */}
+      {/* ✨ 구성원 상세 정보 모달 */}
+      <Dialog open={isMemberDetailOpen} onOpenChange={setIsMemberDetailOpen}>
+        <DialogContent className="border-orange-100 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              {/* ✨ 프로필 사진 업로드 가능한 아바타 */}
+              <div className="relative group">
+                <Avatar className="w-14 h-14">
+                  {selectedMember?.profileImage ? (
+                    <AvatarImage
+                      src={selectedMember.profileImage}
+                      alt={selectedMember.name}
+                    />
+                  ) : null}
+                  <AvatarFallback className="bg-orange-100 text-orange-600 font-medium text-lg">
+                    {selectedMember?.name[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <button
+                  className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                >
+                  {uploadingPhoto ? (
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                  ) : (
+                    <Camera className="w-5 h-5 text-white" />
+                  )}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span>{selectedMember?.name}</span>
+                  {selectedMember?.isOwner && (
+                    <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded font-medium">
+                      관리자
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm font-normal text-gray-500">
+                  {getLastActiveText(
+                    selectedMember?.activity?.lastActiveAt || null
+                  )}
+                </p>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedMember && (
+            <div className="space-y-4 mt-4">
+              {/* 기본 정보 */}
+              <Card className="border-orange-100">
+                <CardContent className="p-4 space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                    📋 기본 정보
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 text-sm">
+                      <Phone className="w-4 h-4 text-orange-400" />
+                      <span className="text-gray-600">전화번호</span>
+                      <span className="ml-auto font-medium">
+                        {formatPhoneNumber(selectedMember.phone || "")}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Mail className="w-4 h-4 text-orange-400" />
+                      <span className="text-gray-600">이메일</span>
+                      <span className="ml-auto font-medium">
+                        {selectedMember.email}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Calendar className="w-4 h-4 text-orange-400" />
+                      <span className="text-gray-600">가입일</span>
+                      <span className="ml-auto font-medium">
+                        {formatDate(selectedMember.joinedDate)}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ✨ 활동 통계 - 6개 항목으로 변경 */}
+              <Card className="border-orange-100">
+                <CardContent className="p-4 space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                    📊 활동 통계
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                      <Utensils className="w-5 h-5 text-orange-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-orange-600">
+                        {selectedMember.activity?.mealCount || 0}
+                      </p>
+                      <p className="text-xs text-gray-500">식사 기록</p>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                      <Calendar className="w-5 h-5 text-blue-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-blue-600">
+                        {selectedMember.activity?.scheduleCount || 0}
+                      </p>
+                      <p className="text-xs text-gray-500">일정 등록</p>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                      <Pill className="w-5 h-5 text-green-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-green-600">
+                        {selectedMember.activity?.medicationCount || 0}
+                      </p>
+                      <p className="text-xs text-gray-500">투약 기록</p>
+                    </div>
+                    <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                      <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-indigo-600">
+                        {selectedMember.activity?.sleepCount || 0}
+                      </p>
+                      <p className="text-xs text-gray-500">수면 기록</p>
+                    </div>
+                    <div className="bg-pink-50 rounded-lg p-3 text-center">
+                      <Users className="w-5 h-5 text-pink-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-pink-600">
+                        {selectedMember.activity?.communityCount || 0}
+                      </p>
+                      <p className="text-xs text-gray-500">커뮤니티</p>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3 text-center">
+                      <Activity className="w-5 h-5 text-purple-500 mx-auto mb-1" />
+                      <p className="text-2xl font-bold text-purple-600">
+                        {getTotalActivity(selectedMember.activity)}
+                      </p>
+                      <p className="text-xs text-gray-500">총 활동</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 최근 활동 */}
+              <Card className="border-orange-100">
+                <CardContent className="p-4 space-y-3">
+                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                    🕐 최근 활동
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    {selectedMember.activity?.lastActiveAt ? (
+                      <>
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                          <Activity className="w-4 h-4 text-orange-400" />
+                          <span className="text-gray-600">마지막 활동</span>
+                          <span className="ml-auto text-gray-900">
+                            {formatDate(selectedMember.activity.lastActiveAt)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center py-4 text-gray-400">
+                        아직 활동 기록이 없습니다
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 액션 버튼 */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-orange-200 text-orange-600 hover:bg-orange-50"
+                  onClick={() => {
+                    if (selectedMember.phone) {
+                      window.location.href = `tel:${selectedMember.phone}`;
+                    } else {
+                      toast.error("전화번호가 등록되지 않았습니다");
+                    }
+                  }}
+                >
+                  <Phone className="w-4 h-4 mr-2" />
+                  전화하기
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 border-orange-200 text-orange-600 hover:bg-orange-50"
+                  onClick={() => {
+                    window.location.href = `mailto:${selectedMember.email}`;
+                  }}
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  이메일 보내기
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ✨ 전체 활동 통계 - 6개 항목으로 변경 */}
       {members.length > 0 && (
         <Card className="border-orange-100">
           <CardContent className="p-4">
             <h3 className="text-gray-900 font-semibold mb-3 flex items-center gap-2">
-              📊 활동 통계
+              📊 전체 활동 통계
             </h3>
             <div className="space-y-2">
               {members.map((member) => (
                 <div
                   key={member.id}
-                  className="flex items-center justify-between py-2 border-b border-orange-50 last:border-0"
+                  className="flex items-center justify-between py-2 border-b border-orange-50 last:border-0 cursor-pointer hover:bg-orange-50 rounded-lg px-2 -mx-2 transition-colors"
+                  onClick={() => handleMemberClick(member)}
                 >
                   <div className="flex items-center gap-2">
                     <Avatar className="w-6 h-6">
+                      {member.profileImage ? (
+                        <AvatarImage
+                          src={member.profileImage}
+                          alt={member.name}
+                        />
+                      ) : null}
                       <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
                         {member.name[0]}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm">{member.name}</span>
+                    <span className="text-sm font-medium">{member.name}</span>
                   </div>
-                  <div className="text-sm">
-                    <span className="text-orange-600 font-medium">
-                      {Math.floor(Math.random() * 20) + 5}
-                    </span>
-                    <span className="text-gray-500">개 기록</span>
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-1">
+                      <Utensils className="w-3 h-3 text-orange-400" />
+                      <span className="text-orange-600 font-medium">
+                        {member.activity?.mealCount || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-blue-400" />
+                      <span className="text-blue-600 font-medium">
+                        {member.activity?.scheduleCount || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Pill className="w-3 h-3 text-green-400" />
+                      <span className="text-green-600 font-medium">
+                        {member.activity?.medicationCount || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Moon className="w-3 h-3 text-indigo-400" />
+                      <span className="text-indigo-600 font-medium">
+                        {member.activity?.sleepCount || 0}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Users className="w-3 h-3 text-pink-400" />
+                      <span className="text-pink-600 font-medium">
+                        {member.activity?.communityCount || 0}
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* ✨ 범례 - 6개 항목 */}
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-4 pt-3 border-t border-orange-100">
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Utensils className="w-3 h-3 text-orange-400" />
+                <span>식사</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Calendar className="w-3 h-3 text-blue-400" />
+                <span>일정</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Pill className="w-3 h-3 text-green-400" />
+                <span>투약</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Moon className="w-3 h-3 text-indigo-400" />
+                <span>수면</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Users className="w-3 h-3 text-pink-400" />
+                <span>커뮤니티</span>
+              </div>
             </div>
           </CardContent>
         </Card>

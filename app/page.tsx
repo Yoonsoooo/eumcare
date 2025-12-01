@@ -14,7 +14,8 @@ import {
   Moon,
   X,
   ChevronDown,
-  Type, // ✨ 글자 크기 아이콘
+  Type,
+  User, // ✨ 마이페이지 아이콘
 } from "lucide-react";
 import { Dashboard } from "./components/Dashboard";
 import { SharedDiary } from "./components/SharedDiary";
@@ -22,6 +23,7 @@ import { ScheduleManager } from "./components/ScheduleManager";
 import { MedicineReminder } from "./components/MedicineReminder";
 import { Community } from "./components/Community";
 import { FamilyMembers } from "./components/FamilyMembers";
+import { ProfileSettings } from "./components/ProfileSettings"; // ✨ 추가
 import { AuthDialog } from "./components/AuthDialog";
 import { OnboardingDialog } from "./components/OnboardingDialog";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
@@ -36,9 +38,16 @@ import { apiClient } from "./utils/api";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 
-type Tab = "home" | "diary" | "schedule" | "reminder" | "community" | "family";
+// ✨ profile 추가
+type Tab =
+  | "home"
+  | "diary"
+  | "schedule"
+  | "reminder"
+  | "community"
+  | "family"
+  | "profile";
 
-// ✨ 글자 크기 타입
 type FontSize = "default" | "large" | "xlarge";
 
 interface RecentActivity {
@@ -64,10 +73,8 @@ export default function App() {
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [showAllActivities, setShowAllActivities] = useState(false);
 
-  // ✨ 글자 크기 상태 (localStorage에 저장)
   const [fontSize, setFontSize] = useState<FontSize>("default");
 
-  // ✨ 글자 크기 설정 불러오기
   useEffect(() => {
     const saved = localStorage.getItem("fontSize") as FontSize;
     if (saved) {
@@ -75,7 +82,6 @@ export default function App() {
     }
   }, []);
 
-  // ✨ 글자 크기 변경 시 저장
   const handleFontSizeChange = (size: FontSize) => {
     setFontSize(size);
     localStorage.setItem("fontSize", size);
@@ -88,7 +94,6 @@ export default function App() {
     );
   };
 
-  // ✨ 글자 크기에 따른 CSS 클래스
   const getFontSizeClass = () => {
     switch (fontSize) {
       case "large":
@@ -100,7 +105,6 @@ export default function App() {
     }
   };
 
-  // ✨ 글자 크기 배율
   const getFontScale = () => {
     switch (fontSize) {
       case "large":
@@ -297,6 +301,7 @@ export default function App() {
     setUser(null);
     setDiary(null);
     setRecentActivities([]);
+    setActiveTab("home");
     toast.success("로그아웃되었습니다");
   }
 
@@ -323,7 +328,7 @@ export default function App() {
     );
   }
 
-  // ✨ fontSize를 props로 전달
+  // ✨ profile 케이스 추가
   const renderContent = () => {
     const fontScale = getFontScale();
 
@@ -345,6 +350,10 @@ export default function App() {
         return <Community fontScale={fontScale} />;
       case "family":
         return <FamilyMembers fontScale={fontScale} />;
+      case "profile": // ✨ 추가
+        return (
+          <ProfileSettings fontScale={fontScale} onSignOut={handleSignOut} />
+        );
       default:
         return (
           <Dashboard
@@ -416,6 +425,12 @@ export default function App() {
                     label="커뮤니티"
                   />
                   <NavButton tab="family" icon={Users} label="가족 구성원" />
+
+                  {/* ✨ 구분선 */}
+                  <div className="h-px bg-orange-100 my-2" />
+
+                  {/* ✨ 마이페이지 */}
+                  <NavButton tab="profile" icon={User} label="마이페이지" />
                 </div>
               </SheetContent>
             </Sheet>
@@ -433,7 +448,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* ✨ 글자 크기 조절 버튼 */}
+            {/* 글자 크기 조절 버튼 */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -615,20 +630,20 @@ export default function App() {
               </Popover>
             )}
 
-            {/* 로그인/로그아웃 버튼 */}
-            {user ? (
+            {/* ✨ 마이페이지 버튼 (로그인 상태에서만) */}
+            {user && (
               <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSignOut}
-                className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                variant="ghost"
+                size="icon"
+                className="hover:bg-orange-50"
+                onClick={() => setActiveTab("profile")}
               >
-                <LogOut className="w-4 h-4 mr-1" />
-                <span className={fontSize === "xlarge" ? "text-base" : ""}>
-                  로그아웃
-                </span>
+                <User className="w-5 h-5" />
               </Button>
-            ) : (
+            )}
+
+            {/* 로그인/로그아웃 버튼 */}
+            {!user && (
               <Button
                 variant="outline"
                 size="sm"
@@ -654,6 +669,12 @@ export default function App() {
             <NavButton tab="reminder" icon={Bell} label="약 알림" />
             <NavButton tab="community" icon={MessageCircle} label="커뮤니티" />
             <NavButton tab="family" icon={Users} label="가족 구성원" />
+
+            {/* ✨ 구분선 */}
+            <div className="h-px bg-orange-100 my-2" />
+
+            {/* ✨ 마이페이지 */}
+            <NavButton tab="profile" icon={User} label="마이페이지" />
           </nav>
         </aside>
 
@@ -662,7 +683,7 @@ export default function App() {
       </div>
 
       {/* Bottom Navigation - Mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-orange-100 px-4 py-2 z-10">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-orange-100 px-2 py-2 z-10">
         <div className="flex items-center justify-around">
           <button
             onClick={() => setActiveTab("home")}
@@ -716,17 +737,18 @@ export default function App() {
               약 알림
             </span>
           </button>
+          {/* ✨ 마이페이지로 변경 */}
           <button
-            onClick={() => setActiveTab("family")}
+            onClick={() => setActiveTab("profile")}
             className={`flex flex-col items-center gap-1 p-2 ${
-              activeTab === "family" ? "text-orange-600" : "text-gray-400"
+              activeTab === "profile" ? "text-orange-600" : "text-gray-400"
             }`}
           >
-            <Users className="w-5 h-5" />
+            <User className="w-5 h-5" />
             <span
               className={`${fontSize === "xlarge" ? "text-sm" : "text-xs"}`}
             >
-              가족
+              MY
             </span>
           </button>
         </div>

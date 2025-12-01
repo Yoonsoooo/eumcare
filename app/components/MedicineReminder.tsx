@@ -1,5 +1,3 @@
-// components/MedicineReminder.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -22,7 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
@@ -45,6 +42,10 @@ interface MedicineReminder {
   familyDelayMinutes: number;
   isActive: boolean;
   lastConfirmed?: string;
+}
+
+interface MedicineReminderProps {
+  fontScale?: number; // ✨ 추가
 }
 
 // 알림 권한 요청
@@ -75,14 +76,13 @@ function sendBrowserNotification(
   if (Notification.permission === "granted") {
     const notification = new Notification(title, {
       body,
-      icon: "/pill-icon.png", // 앱 아이콘
+      icon: "/pill-icon.png",
       badge: "/badge-icon.png",
       tag: "medicine-reminder",
-      requireInteraction, // 사용자가 클릭할 때까지 유지
-      vibrate: [200, 100, 200], // 진동 패턴
+      requireInteraction,
+      vibrate: [200, 100, 200],
     });
 
-    // 알림 클릭 시 앱으로 이동
     notification.onclick = () => {
       window.focus();
       notification.close();
@@ -94,13 +94,13 @@ function sendBrowserNotification(
 
 // 알림음 재생
 function playAlarmSound() {
-  const audio = new Audio("/alarm-sound.mp3"); // public 폴더에 알림음 파일 추가
+  const audio = new Audio("/alarm-sound.mp3");
   audio.loop = true;
   audio.play();
   return audio;
 }
 
-export function MedicineReminder() {
+export function MedicineReminder({ fontScale = 1 }: MedicineReminderProps) {
   const [reminders, setReminders] = useState<MedicineReminder[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [notificationEnabled, setNotificationEnabled] = useState(false);
@@ -117,6 +117,13 @@ export function MedicineReminder() {
     familyDelayMinutes: 5,
   });
 
+  // ✨ fontScale에 따른 font-weight
+  const getFontWeight = () => {
+    if (fontScale >= 1.5) return "font-semibold";
+    if (fontScale >= 1.2) return "font-medium";
+    return "font-normal";
+  };
+
   // 로컬 스토리지에서 알림 불러오기
   useEffect(() => {
     const saved = localStorage.getItem("medicineReminders");
@@ -124,15 +131,11 @@ export function MedicineReminder() {
       setReminders(JSON.parse(saved));
     }
 
-    // 알림 권한 확인
     if ("Notification" in window && Notification.permission === "granted") {
       setNotificationEnabled(true);
     }
 
-    // 알림 체크 인터벌 설정 (매 분마다)
     const interval = setInterval(checkReminders, 60000);
-
-    // 초기 체크
     checkReminders();
 
     return () => clearInterval(interval);
@@ -155,7 +158,6 @@ export function MedicineReminder() {
         reminder.time === currentTime &&
         reminder.days.includes(currentDay)
       ) {
-        // 오늘 이미 확인했는지 체크
         const today = now.toDateString();
         if (reminder.lastConfirmed !== today) {
           triggerAlarm(reminder);
@@ -166,23 +168,17 @@ export function MedicineReminder() {
 
   // 알람 트리거
   function triggerAlarm(reminder: MedicineReminder) {
-    // 브라우저 알림
     sendBrowserNotification(
       "💊 약 복용 시간이에요!",
       `${reminder.medicineName}을(를) 복용할 시간입니다.`,
       true
     );
 
-    // 알림음 재생
     const audio = playAlarmSound();
-
-    // 알람 상태 저장 (화면에 표시하기 위해)
     setActiveAlarm({ reminder, audio });
 
-    // 가족 알림 타이머 설정
     if (reminder.notifyFamily) {
       setTimeout(() => {
-        // 아직 확인 안 했으면 가족에게 알림
         const stillActive = document.querySelector(
           '[data-alarm-active="true"]'
         );
@@ -193,15 +189,13 @@ export function MedicineReminder() {
     }
   }
 
-  // 가족에게 알림 (앱 내 알림으로 구현)
+  // 가족에게 알림
   function notifyFamily(reminder: MedicineReminder) {
-    // 실제로는 Supabase를 통해 가족 구성원에게 알림 전송
     toast.error(
       `⚠️ 가족 알림: ${reminder.medicineName} 복용이 확인되지 않았습니다!`,
       { duration: 10000 }
     );
 
-    // 브라우저 알림도 다시 보내기
     sendBrowserNotification(
       "⚠️ 약 복용 미확인",
       `${reminder.medicineName} 복용이 ${reminder.familyDelayMinutes}분 동안 확인되지 않았습니다.`,
@@ -212,13 +206,11 @@ export function MedicineReminder() {
   // 알람 확인 (끄기)
   function confirmAlarm() {
     if (activeAlarm) {
-      // 알림음 정지
       if (activeAlarm.audio) {
         activeAlarm.audio.pause();
         activeAlarm.audio.currentTime = 0;
       }
 
-      // 확인 시간 저장
       setReminders((prev) =>
         prev.map((r) =>
           r.id === activeAlarm.reminder.id
@@ -238,7 +230,6 @@ export function MedicineReminder() {
     setNotificationEnabled(granted);
     if (granted) {
       toast.success("알림이 활성화되었습니다!");
-      // 테스트 알림
       sendBrowserNotification(
         "알림 테스트",
         "알림이 정상적으로 작동합니다!",
@@ -312,17 +303,35 @@ export function MedicineReminder() {
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
         >
           <Card className="w-full max-w-sm animate-pulse border-orange-500 border-2">
-            <CardContent className="p-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4 animate-bounce">
-                <BellRing className="w-10 h-10 text-orange-600" />
+            <CardContent
+              style={{ padding: `${1.5 * fontScale}rem` }}
+              className="text-center"
+            >
+              <div
+                className="rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4 animate-bounce"
+                style={{ width: 80 * fontScale, height: 80 * fontScale }}
+              >
+                <BellRing
+                  className="text-orange-600"
+                  style={{ width: 40 * fontScale, height: 40 * fontScale }}
+                />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              <h2
+                className={`text-gray-900 mb-2 ${getFontWeight()}`}
+                style={{ fontSize: `${1.5 * fontScale}rem` }}
+              >
                 💊 약 복용 시간!
               </h2>
-              <p className="text-lg text-orange-600 font-medium mb-4">
+              <p
+                className={`text-orange-600 mb-4 ${getFontWeight()}`}
+                style={{ fontSize: `${1.125 * fontScale}rem` }}
+              >
                 {activeAlarm.reminder.medicineName}
               </p>
-              <p className="text-sm text-gray-500 mb-6">
+              <p
+                className="text-gray-500 mb-6"
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+              >
                 {activeAlarm.reminder.notifyFamily && (
                   <>
                     {activeAlarm.reminder.familyDelayMinutes}분 내 확인하지
@@ -333,11 +342,20 @@ export function MedicineReminder() {
                 )}
               </p>
               <Button
-                size="lg"
-                className="w-full bg-green-500 hover:bg-green-600 text-lg py-6"
+                className="w-full bg-green-500 hover:bg-green-600"
                 onClick={confirmAlarm}
+                style={{
+                  fontSize: `${1.125 * fontScale}rem`,
+                  padding: `${1.5 * fontScale}rem`,
+                }}
               >
-                <Check className="w-6 h-6 mr-2" />
+                <Check
+                  style={{
+                    width: 24 * fontScale,
+                    height: 24 * fontScale,
+                    marginRight: 8,
+                  }}
+                />
                 복용 완료
               </Button>
             </CardContent>
@@ -348,26 +366,47 @@ export function MedicineReminder() {
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">💊 약 복용 알림</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2
+            className={`font-bold ${getFontWeight()}`}
+            style={{ fontSize: `${1.25 * fontScale}rem` }}
+          >
+            💊 약 복용 알림
+          </h2>
+          <p
+            className="text-gray-500 mt-1"
+            style={{ fontSize: `${0.875 * fontScale}rem` }}
+          >
             설정한 시간에 알림을 받으세요
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <Plus className="w-4 h-4 mr-2" />
+            <Button
+              className="bg-orange-500 hover:bg-orange-600"
+              style={{ fontSize: `${0.875 * fontScale}rem` }}
+            >
+              <Plus
+                style={{
+                  width: 16 * fontScale,
+                  height: 16 * fontScale,
+                  marginRight: 8,
+                }}
+              />
               알림 추가
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>🔔 새 약 복용 알림</DialogTitle>
+              <DialogTitle style={{ fontSize: `${1.125 * fontScale}rem` }}>
+                🔔 새 약 복용 알림
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               {/* 약 이름 */}
               <div className="space-y-2">
-                <Label>약 이름 *</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  약 이름 *
+                </Label>
                 <Input
                   placeholder="예: 혈압약, 당뇨약"
                   value={newReminder.medicineName}
@@ -377,36 +416,46 @@ export function MedicineReminder() {
                       medicineName: e.target.value,
                     })
                   }
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 />
               </div>
 
               {/* 시간 */}
               <div className="space-y-2">
-                <Label>알림 시간 *</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  알림 시간 *
+                </Label>
                 <Input
                   type="time"
                   value={newReminder.time}
                   onChange={(e) =>
                     setNewReminder({ ...newReminder, time: e.target.value })
                   }
-                  className="text-lg"
+                  style={{ fontSize: `${1.125 * fontScale}rem` }}
                 />
               </div>
 
               {/* 요일 선택 */}
               <div className="space-y-2">
-                <Label>반복 요일</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  반복 요일
+                </Label>
                 <div className="flex gap-1">
                   {weekDays.map((day) => (
                     <button
                       key={day}
                       type="button"
                       onClick={() => toggleDay(day)}
-                      className={`w-10 h-10 rounded-full text-sm font-medium transition-colors ${
+                      className={`rounded-full font-medium transition-colors ${
                         newReminder.days.includes(day)
                           ? "bg-orange-500 text-white"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
+                      style={{
+                        width: 40 * fontScale,
+                        height: 40 * fontScale,
+                        fontSize: `${0.875 * fontScale}rem`,
+                      }}
                     >
                       {day}
                     </button>
@@ -418,11 +467,20 @@ export function MedicineReminder() {
               <div className="h-px bg-orange-100 my-4" />
 
               {/* 가족 알림 설정 */}
-              <div className="space-y-4 p-4 bg-orange-50 rounded-lg">
+              <div
+                className="space-y-4 bg-orange-50 rounded-lg"
+                style={{ padding: `${1 * fontScale}rem` }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-orange-600" />
-                    <Label className="font-medium">
+                    <Users
+                      className="text-orange-600"
+                      style={{ width: 20 * fontScale, height: 20 * fontScale }}
+                    />
+                    <Label
+                      className={getFontWeight()}
+                      style={{ fontSize: `${0.875 * fontScale}rem` }}
+                    >
                       미확인 시 가족에게 알림
                     </Label>
                   </div>
@@ -436,7 +494,9 @@ export function MedicineReminder() {
 
                 {newReminder.notifyFamily && (
                   <div className="space-y-2">
-                    <Label>알림 대기 시간</Label>
+                    <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                      알림 대기 시간
+                    </Label>
                     <Select
                       value={String(newReminder.familyDelayMinutes)}
                       onValueChange={(v) =>
@@ -446,7 +506,9 @@ export function MedicineReminder() {
                         })
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger
+                        style={{ fontSize: `${1 * fontScale}rem` }}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -457,7 +519,10 @@ export function MedicineReminder() {
                         <SelectItem value="30">30분 후</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-500">
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: `${0.75 * fontScale}rem` }}
+                    >
                       이 시간 동안 확인이 없으면 가족에게 알림이 갑니다
                     </p>
                   </div>
@@ -467,6 +532,7 @@ export function MedicineReminder() {
               <Button
                 className="w-full bg-orange-500 hover:bg-orange-600"
                 onClick={handleAddReminder}
+                style={{ fontSize: `${1 * fontScale}rem` }}
               >
                 알림 설정하기
               </Button>
@@ -478,23 +544,35 @@ export function MedicineReminder() {
       {/* 알림 권한 배너 */}
       {!notificationEnabled && (
         <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="p-4">
+          <CardContent style={{ padding: `${1 * fontScale}rem` }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                <Bell className="w-5 h-5 text-amber-600" />
+              <div
+                className="rounded-full bg-amber-100 flex items-center justify-center shrink-0"
+                style={{ width: 40 * fontScale, height: 40 * fontScale }}
+              >
+                <Bell
+                  className="text-amber-600"
+                  style={{ width: 20 * fontScale, height: 20 * fontScale }}
+                />
               </div>
               <div className="flex-1">
-                <p className="font-medium text-amber-800">
+                <p
+                  className={`text-amber-800 ${getFontWeight()}`}
+                  style={{ fontSize: `${0.875 * fontScale}rem` }}
+                >
                   알림을 허용해주세요
                 </p>
-                <p className="text-sm text-amber-600">
+                <p
+                  className="text-amber-600"
+                  style={{ fontSize: `${0.75 * fontScale}rem` }}
+                >
                   약 복용 시간에 알림을 받으려면 권한이 필요합니다
                 </p>
               </div>
               <Button
-                size="sm"
                 className="bg-amber-500 hover:bg-amber-600"
                 onClick={handleEnableNotification}
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
               >
                 허용하기
               </Button>
@@ -503,11 +581,10 @@ export function MedicineReminder() {
         </Card>
       )}
 
-      {/* 테스트 버튼 (개발용) */}
+      {/* 테스트 버튼 */}
       <div className="flex gap-2">
         <Button
           variant="outline"
-          size="sm"
           onClick={() => {
             sendBrowserNotification(
               "테스트 알림",
@@ -516,13 +593,19 @@ export function MedicineReminder() {
             );
           }}
           className="text-orange-600 border-orange-200"
+          style={{ fontSize: `${0.875 * fontScale}rem` }}
         >
-          <Bell className="w-4 h-4 mr-2" />
+          <Bell
+            style={{
+              width: 16 * fontScale,
+              height: 16 * fontScale,
+              marginRight: 8,
+            }}
+          />
           알림 테스트
         </Button>
         <Button
           variant="outline"
-          size="sm"
           onClick={() => {
             if (reminders.length > 0) {
               triggerAlarm(reminders[0]);
@@ -531,8 +614,15 @@ export function MedicineReminder() {
             }
           }}
           className="text-orange-600 border-orange-200"
+          style={{ fontSize: `${0.875 * fontScale}rem` }}
         >
-          <Volume2 className="w-4 h-4 mr-2" />
+          <Volume2
+            style={{
+              width: 16 * fontScale,
+              height: 16 * fontScale,
+              marginRight: 8,
+            }}
+          />
           알람 테스트
         </Button>
       </div>
@@ -541,10 +631,23 @@ export function MedicineReminder() {
       <div className="space-y-3">
         {reminders.length === 0 ? (
           <Card className="border-orange-100">
-            <CardContent className="p-8 text-center text-gray-500">
-              <Pill className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p>설정된 약 복용 알림이 없습니다</p>
-              <p className="text-sm mt-1">알림을 추가해보세요!</p>
+            <CardContent
+              className="text-center text-gray-500"
+              style={{ padding: `${2 * fontScale}rem` }}
+            >
+              <Pill
+                className="mx-auto mb-3 text-gray-300"
+                style={{ width: 48 * fontScale, height: 48 * fontScale }}
+              />
+              <p style={{ fontSize: `${1 * fontScale}rem` }}>
+                설정된 약 복용 알림이 없습니다
+              </p>
+              <p
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+                className="mt-1"
+              >
+                알림을 추가해보세요!
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -555,30 +658,60 @@ export function MedicineReminder() {
                 !reminder.isActive ? "opacity-50" : ""
               }`}
             >
-              <CardContent className="p-4">
+              <CardContent style={{ padding: `${1 * fontScale}rem` }}>
                 <div className="flex items-start gap-4">
                   {/* 아이콘 */}
-                  <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                    <Pill className="w-6 h-6 text-orange-600" />
+                  <div
+                    className="rounded-full bg-orange-100 flex items-center justify-center shrink-0"
+                    style={{ width: 48 * fontScale, height: 48 * fontScale }}
+                  >
+                    <Pill
+                      className="text-orange-600"
+                      style={{ width: 24 * fontScale, height: 24 * fontScale }}
+                    />
                   </div>
 
                   {/* 내용 */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">
+                      <h3
+                        className={`text-gray-900 ${getFontWeight()}`}
+                        style={{ fontSize: `${1 * fontScale}rem` }}
+                      >
                         {reminder.medicineName}
                       </h3>
                       {reminder.notifyFamily && (
-                        <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-600 rounded-full flex items-center gap-1">
-                          <Users className="w-3 h-3" />
+                        <span
+                          className="bg-orange-100 text-orange-600 rounded-full flex items-center gap-1"
+                          style={{
+                            fontSize: `${0.75 * fontScale}rem`,
+                            padding: `${0.125 * fontScale}rem ${
+                              0.5 * fontScale
+                            }rem`,
+                          }}
+                        >
+                          <Users
+                            style={{
+                              width: 12 * fontScale,
+                              height: 12 * fontScale,
+                            }}
+                          />
                           가족알림
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Clock className="w-4 h-4" />
-                      <span className="font-medium text-xl text-orange-600">
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Clock
+                        style={{
+                          width: 16 * fontScale,
+                          height: 16 * fontScale,
+                        }}
+                      />
+                      <span
+                        className={`text-orange-600 ${getFontWeight()}`}
+                        style={{ fontSize: `${1.25 * fontScale}rem` }}
+                      >
                         {reminder.time}
                       </span>
                     </div>
@@ -587,11 +720,16 @@ export function MedicineReminder() {
                       {weekDays.map((day) => (
                         <span
                           key={day}
-                          className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${
+                          className={`rounded-full flex items-center justify-center ${
                             reminder.days.includes(day)
                               ? "bg-orange-500 text-white"
                               : "bg-gray-100 text-gray-400"
                           }`}
+                          style={{
+                            width: 24 * fontScale,
+                            height: 24 * fontScale,
+                            fontSize: `${0.75 * fontScale}rem`,
+                          }}
                         >
                           {day}
                         </span>
@@ -599,14 +737,20 @@ export function MedicineReminder() {
                     </div>
 
                     {reminder.notifyFamily && (
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p
+                        className="text-gray-500 mt-2"
+                        style={{ fontSize: `${0.75 * fontScale}rem` }}
+                      >
                         ⏰ {reminder.familyDelayMinutes}분 미확인 시 가족에게
                         알림
                       </p>
                     )}
 
                     {reminder.lastConfirmed && (
-                      <p className="text-xs text-green-600 mt-1">
+                      <p
+                        className="text-green-600 mt-1"
+                        style={{ fontSize: `${0.75 * fontScale}rem` }}
+                      >
                         ✅ 마지막 확인: {reminder.lastConfirmed}
                       </p>
                     )}
@@ -624,7 +768,12 @@ export function MedicineReminder() {
                       className="text-red-500 hover:bg-red-50"
                       onClick={() => handleDeleteReminder(reminder.id)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2
+                        style={{
+                          width: 16 * fontScale,
+                          height: 16 * fontScale,
+                        }}
+                      />
                     </Button>
                   </div>
                 </div>

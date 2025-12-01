@@ -46,7 +46,6 @@ interface Schedule {
   authorName: string;
 }
 
-// ✅ 로컬 날짜를 YYYY-MM-DD 형식으로 변환 (UTC 문제 해결)
 function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -54,17 +53,18 @@ function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// 커스텀 달력 컴포넌트
 interface CustomCalendarProps {
   selectedDate: Date;
   onSelectDate: (date: Date) => void;
   scheduleDates: Set<string>;
+  fontScale: number; // ✨ 추가
 }
 
 function CustomCalendar({
   selectedDate,
   onSelectDate,
   scheduleDates,
+  fontScale,
 }: CustomCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -86,17 +86,11 @@ function CustomCalendar({
     return days;
   }, [currentMonth]);
 
-  const isToday = (date: Date) => {
-    return formatLocalDate(date) === formatLocalDate(new Date());
-  };
-
-  const isSelected = (date: Date) => {
-    return formatLocalDate(date) === formatLocalDate(selectedDate);
-  };
-
-  const hasSchedule = (date: Date) => {
-    return scheduleDates.has(formatLocalDate(date));
-  };
+  const isToday = (date: Date) =>
+    formatLocalDate(date) === formatLocalDate(new Date());
+  const isSelected = (date: Date) =>
+    formatLocalDate(date) === formatLocalDate(selectedDate);
+  const hasSchedule = (date: Date) => scheduleDates.has(formatLocalDate(date));
 
   const prevMonth = () => {
     setCurrentMonth(
@@ -116,16 +110,20 @@ function CustomCalendar({
     <div className="w-full max-w-sm mx-auto">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-3">
-        {/* ✨ 버튼 호버 색상 변경 */}
         <Button
           variant="ghost"
           size="sm"
           onClick={prevMonth}
           className="hover:bg-orange-50"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft
+            style={{ width: 16 * fontScale, height: 16 * fontScale }}
+          />
         </Button>
-        <h3 className="text-base font-semibold text-gray-800">
+        <h3
+          className="font-semibold text-gray-800"
+          style={{ fontSize: `${1 * fontScale}rem` }}
+        >
           {currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월
         </h3>
         <Button
@@ -134,7 +132,9 @@ function CustomCalendar({
           onClick={nextMonth}
           className="hover:bg-orange-50"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight
+            style={{ width: 16 * fontScale, height: 16 * fontScale }}
+          />
         </Button>
       </div>
 
@@ -143,20 +143,21 @@ function CustomCalendar({
         {weekDays.map((day, idx) => (
           <div
             key={day}
-            className={`text-center text-xs font-medium py-1 ${
+            className={`text-center font-medium py-1 ${
               idx === 0
                 ? "text-rose-500"
                 : idx === 6
                 ? "text-orange-500"
                 : "text-gray-500"
             }`}
+            style={{ fontSize: `${0.75 * fontScale}rem` }}
           >
             {day}
           </div>
         ))}
       </div>
 
-      {/* 날짜 그리드 - ✨ 색상 따뜻한 톤으로 변경 */}
+      {/* 날짜 그리드 */}
       <div className="grid grid-cols-7 gap-1">
         {daysInMonth.map((date, index) => (
           <div key={index} className="p-0.5">
@@ -164,8 +165,7 @@ function CustomCalendar({
               <button
                 onClick={() => onSelectDate(date)}
                 className={`
-                  w-full h-8 rounded-md flex items-center justify-center
-                  text-sm transition-all relative
+                  w-full rounded-md flex items-center justify-center transition-all
                   ${
                     isSelected(date)
                       ? "bg-orange-500 text-white font-bold"
@@ -190,28 +190,44 @@ function CustomCalendar({
                       : ""
                   }
                 `}
+                style={{
+                  height: `${2 * fontScale}rem`,
+                  fontSize: `${0.875 * fontScale}rem`,
+                }}
               >
                 {date.getDate()}
               </button>
             ) : (
-              <div className="w-full h-8" />
+              <div style={{ height: `${2 * fontScale}rem` }} />
             )}
           </div>
         ))}
       </div>
 
-      {/* 범례 - ✨ 색상 변경 */}
-      <div className="flex items-center justify-center gap-4 mt-3 text-xs text-gray-500">
+      {/* 범례 */}
+      <div
+        className="flex items-center justify-center gap-4 mt-3 text-gray-500"
+        style={{ fontSize: `${0.75 * fontScale}rem` }}
+      >
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-orange-500" />
+          <div
+            className="rounded-sm bg-orange-500"
+            style={{ width: 12 * fontScale, height: 12 * fontScale }}
+          />
           <span>선택</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-amber-100" />
+          <div
+            className="rounded-sm bg-amber-100"
+            style={{ width: 12 * fontScale, height: 12 * fontScale }}
+          />
           <span>일정 있음</span>
         </div>
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded-sm bg-orange-100" />
+          <div
+            className="rounded-sm bg-orange-100"
+            style={{ width: 12 * fontScale, height: 12 * fontScale }}
+          />
           <span>오늘</span>
         </div>
       </div>
@@ -219,19 +235,20 @@ function CustomCalendar({
   );
 }
 
-export function ScheduleManager() {
+interface ScheduleManagerProps {
+  fontScale?: number; // ✨ 추가
+}
+
+export function ScheduleManager({ fontScale = 1 }: ScheduleManagerProps) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(
     null
   );
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showAllSchedules, setShowAllSchedules] = useState(false);
-
   const [newSchedule, setNewSchedule] = useState({
     title: "",
     date: "",
@@ -242,6 +259,12 @@ export function ScheduleManager() {
     reminder: true,
   });
 
+  const getFontWeight = () => {
+    if (fontScale >= 1.5) return "font-semibold";
+    if (fontScale >= 1.2) return "font-medium";
+    return "font-normal";
+  };
+
   useEffect(() => {
     const init = async () => {
       const { user } = await getCurrentUser();
@@ -250,16 +273,13 @@ export function ScheduleManager() {
     init();
   }, []);
 
-  // 일정이 있는 날짜들의 Set
-  const scheduleDates = useMemo(() => {
-    return new Set(schedules.map((s) => s.date));
-  }, [schedules]);
+  const scheduleDates = useMemo(
+    () => new Set(schedules.map((s) => s.date)),
+    [schedules]
+  );
 
-  // 선택된 날짜의 일정들
   const filteredSchedules = useMemo(() => {
-    if (showAllSchedules) {
-      return schedules;
-    }
+    if (showAllSchedules) return schedules;
     const dateStr = formatLocalDate(selectedDate);
     return schedules.filter((s) => s.date === dateStr);
   }, [schedules, selectedDate, showAllSchedules]);
@@ -310,14 +330,12 @@ export function ScheduleManager() {
         loadSchedules();
       }
     } catch (error) {
-      console.error("Error:", error);
       toast.error("저장에 실패했습니다.");
     }
   };
 
   const handleDelete = async () => {
     if (!selectedSchedule) return;
-
     if (confirm("정말 이 일정을 삭제하시겠습니까?")) {
       try {
         await apiClient.deleteSchedule(selectedSchedule.id);
@@ -326,7 +344,6 @@ export function ScheduleManager() {
         setSelectedSchedule(null);
         loadSchedules();
       } catch (error) {
-        console.error("Delete error:", error);
         toast.error("삭제에 실패했습니다.");
       }
     }
@@ -341,7 +358,6 @@ export function ScheduleManager() {
       ? "🩺 치료"
       : "📌 기타";
 
-  // ✨ 카테고리 색상 따뜻한 톤으로 변경
   const getCategoryColor = (c: string) =>
     c === "hospital"
       ? "bg-rose-100 text-rose-700"
@@ -365,40 +381,60 @@ export function ScheduleManager() {
     <div className="space-y-4 pb-20 md:pb-6">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">일정 관리</h2>
+        <h2
+          className={`font-bold ${getFontWeight()}`}
+          style={{ fontSize: `${1.25 * fontScale}rem` }}
+        >
+          일정 관리
+        </h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            {/* ✨ 버튼 색상 변경 */}
-            <Button size="sm" className="bg-orange-500 hover:bg-orange-600">
-              <Plus className="w-4 h-4 mr-1" />
+            <Button
+              className="bg-orange-500 hover:bg-orange-600"
+              style={{ fontSize: `${0.875 * fontScale}rem` }}
+            >
+              <Plus
+                style={{
+                  width: 16 * fontScale,
+                  height: 16 * fontScale,
+                  marginRight: 4,
+                }}
+              />
               일정 추가
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>📅 새 일정 추가</DialogTitle>
+              <DialogTitle style={{ fontSize: `${1.125 * fontScale}rem` }}>
+                📅 새 일정 추가
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label>제목 *</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  제목 *
+                </Label>
                 <Input
                   placeholder="일정 제목을 입력하세요"
                   value={newSchedule.title}
                   onChange={(e) =>
                     setNewSchedule({ ...newSchedule, title: e.target.value })
                   }
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>카테고리</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  카테고리
+                </Label>
                 <Select
                   value={newSchedule.category}
                   onValueChange={(value: Schedule["category"]) =>
                     setNewSchedule({ ...newSchedule, category: value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger style={{ fontSize: `${1 * fontScale}rem` }}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -412,53 +448,65 @@ export function ScheduleManager() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>날짜 *</Label>
+                  <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                    날짜 *
+                  </Label>
                   <Input
                     type="date"
                     value={newSchedule.date}
                     onChange={(e) =>
                       setNewSchedule({ ...newSchedule, date: e.target.value })
                     }
+                    style={{ fontSize: `${1 * fontScale}rem` }}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>시간 *</Label>
+                  <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                    시간 *
+                  </Label>
                   <Input
                     type="time"
                     value={newSchedule.time}
                     onChange={(e) =>
                       setNewSchedule({ ...newSchedule, time: e.target.value })
                     }
+                    style={{ fontSize: `${1 * fontScale}rem` }}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>장소</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  장소
+                </Label>
                 <Input
                   placeholder="장소를 입력하세요"
                   value={newSchedule.location}
                   onChange={(e) =>
                     setNewSchedule({ ...newSchedule, location: e.target.value })
                   }
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>메모</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  메모
+                </Label>
                 <Textarea
                   placeholder="메모를 입력하세요"
                   value={newSchedule.notes}
                   onChange={(e) =>
                     setNewSchedule({ ...newSchedule, notes: e.target.value })
                   }
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 />
               </div>
 
-              {/* ✨ 저장 버튼 색상 변경 */}
               <Button
                 className="w-full bg-orange-500 hover:bg-orange-600"
                 onClick={handleAddSchedule}
+                style={{ fontSize: `${1 * fontScale}rem` }}
               >
                 저장
               </Button>
@@ -467,28 +515,31 @@ export function ScheduleManager() {
         </Dialog>
       </div>
 
-      {/* 커스텀 달력 - ✨ 테두리 색상 변경 */}
+      {/* 커스텀 달력 */}
       <Card className="border-orange-100">
-        <CardContent className="p-4">
+        <CardContent style={{ padding: `${1 * fontScale}rem` }}>
           <CustomCalendar
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
             scheduleDates={scheduleDates}
+            fontScale={fontScale}
           />
         </CardContent>
       </Card>
 
       {/* 선택된 날짜 및 토글 */}
       <div className="flex items-center justify-between">
-        <h3 className="text-gray-700 font-medium text-sm">
+        <h3
+          className={`text-gray-700 ${getFontWeight()}`}
+          style={{ fontSize: `${0.875 * fontScale}rem` }}
+        >
           {showAllSchedules ? "전체 일정" : formatSelectedDate()}
         </h3>
-        {/* ✨ 토글 버튼 색상 변경 */}
         <Button
           variant="outline"
-          size="sm"
           onClick={() => setShowAllSchedules(!showAllSchedules)}
           className="border-orange-200 text-orange-600 hover:bg-orange-50"
+          style={{ fontSize: `${0.875 * fontScale}rem` }}
         >
           {showAllSchedules ? "선택한 날짜만" : "전체 보기"}
         </Button>
@@ -503,7 +554,13 @@ export function ScheduleManager() {
           </div>
         ) : filteredSchedules.length === 0 ? (
           <Card className="border-orange-100">
-            <CardContent className="p-6 text-center text-gray-500">
+            <CardContent
+              className="text-center text-gray-500"
+              style={{
+                padding: `${1.5 * fontScale}rem`,
+                fontSize: `${1 * fontScale}rem`,
+              }}
+            >
               {showAllSchedules
                 ? "등록된 일정이 없습니다."
                 : "선택한 날짜에 일정이 없습니다."}
@@ -519,14 +576,26 @@ export function ScheduleManager() {
                 setIsDetailOpen(true);
               }}
             >
-              <CardContent className="p-3">
+              <CardContent style={{ padding: `${0.75 * fontScale}rem` }}>
                 <div className="flex gap-3">
-                  {/* 왼쪽 날짜 - ✨ 색상 변경 */}
-                  <div className="flex flex-col items-center justify-center min-w-[2.5rem] border-r border-orange-100 pr-3">
-                    <div className="text-xs text-gray-400">
+                  {/* 왼쪽 날짜 */}
+                  <div
+                    className="flex flex-col items-center justify-center border-r border-orange-100"
+                    style={{
+                      minWidth: `${2.5 * fontScale}rem`,
+                      paddingRight: `${0.75 * fontScale}rem`,
+                    }}
+                  >
+                    <div
+                      className="text-gray-400"
+                      style={{ fontSize: `${0.75 * fontScale}rem` }}
+                    >
                       {schedule.date.split("-")[1]}월
                     </div>
-                    <div className="text-orange-600 font-bold text-xl">
+                    <div
+                      className="text-orange-600 font-bold"
+                      style={{ fontSize: `${1.25 * fontScale}rem` }}
+                    >
                       {schedule.date.split("-")[2]}
                     </div>
                   </div>
@@ -535,29 +604,55 @@ export function ScheduleManager() {
                   <div className="flex-1 flex flex-col justify-center min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span
-                        className={`px-1.5 py-0.5 text-xs rounded font-medium ${getCategoryColor(
+                        className={`rounded ${getFontWeight()} ${getCategoryColor(
                           schedule.category
                         )}`}
+                        style={{
+                          fontSize: `${0.75 * fontScale}rem`,
+                          padding: `${0.125 * fontScale}rem ${
+                            0.375 * fontScale
+                          }rem`,
+                        }}
                       >
                         {getCategoryLabel(schedule.category)}
                       </span>
                     </div>
 
-                    <h3 className="font-semibold text-sm text-gray-900 truncate">
+                    <h3
+                      className={`text-gray-900 truncate ${getFontWeight()}`}
+                      style={{ fontSize: `${0.875 * fontScale}rem` }}
+                    >
                       {schedule.title}
                     </h3>
 
-                    {/* ✨ 구분선 색상 변경 */}
-                    <div className="h-px bg-orange-100 my-2 w-full" />
+                    <div
+                      className="h-px bg-orange-100 w-full"
+                      style={{ margin: `${0.5 * fontScale}rem 0` }}
+                    />
 
-                    <div className="text-xs text-gray-500 flex items-center gap-2 mt-1">
+                    <div
+                      className="text-gray-500 flex items-center gap-2"
+                      style={{ fontSize: `${0.75 * fontScale}rem` }}
+                    >
                       <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-orange-400" />
+                        <Clock
+                          style={{
+                            width: 12 * fontScale,
+                            height: 12 * fontScale,
+                          }}
+                          className="text-orange-400"
+                        />
                         <span>{schedule.time}</span>
                       </div>
                       {schedule.location && (
                         <div className="flex items-center gap-1 truncate">
-                          <MapPin className="w-3 h-3 flex-shrink-0 text-orange-400" />
+                          <MapPin
+                            style={{
+                              width: 12 * fontScale,
+                              height: 12 * fontScale,
+                            }}
+                            className="text-orange-400 flex-shrink-0"
+                          />
                           <span className="truncate">{schedule.location}</span>
                         </div>
                       )}
@@ -574,57 +669,88 @@ export function ScheduleManager() {
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>상세 정보</DialogTitle>
+            <DialogTitle style={{ fontSize: `${1.125 * fontScale}rem` }}>
+              상세 정보
+            </DialogTitle>
           </DialogHeader>
 
           {selectedSchedule && (
             <div className="space-y-4">
               <div>
                 <span
-                  className={`px-2 py-1 text-xs rounded font-medium ${getCategoryColor(
+                  className={`rounded ${getFontWeight()} ${getCategoryColor(
                     selectedSchedule.category
                   )}`}
+                  style={{
+                    fontSize: `${0.75 * fontScale}rem`,
+                    padding: `${0.25 * fontScale}rem ${0.5 * fontScale}rem`,
+                  }}
                 >
                   {getCategoryLabel(selectedSchedule.category)}
                 </span>
-                <h2 className="text-xl font-bold mt-2">
+                <h2
+                  className={`font-bold mt-2 ${getFontWeight()}`}
+                  style={{ fontSize: `${1.25 * fontScale}rem` }}
+                >
                   {selectedSchedule.title}
                 </h2>
               </div>
 
-              {/* ✨ 아이콘 색상 변경 */}
-              <div className="space-y-2 text-sm text-gray-600">
+              <div
+                className="space-y-2 text-gray-600"
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+              >
                 <div className="flex items-center gap-2">
-                  <CalendarIcon className="w-4 h-4 text-orange-500" />{" "}
+                  <CalendarIcon
+                    style={{ width: 16 * fontScale, height: 16 * fontScale }}
+                    className="text-orange-500"
+                  />
                   {selectedSchedule.date}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-orange-500" />{" "}
+                  <Clock
+                    style={{ width: 16 * fontScale, height: 16 * fontScale }}
+                    className="text-orange-500"
+                  />
                   {selectedSchedule.time}
                 </div>
                 {selectedSchedule.location && (
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-orange-500" />{" "}
+                    <MapPin
+                      style={{ width: 16 * fontScale, height: 16 * fontScale }}
+                      className="text-orange-500"
+                    />
                     {selectedSchedule.location}
                   </div>
                 )}
               </div>
 
               {selectedSchedule.notes && (
-                <div className="bg-orange-50 p-3 rounded-md text-sm">
-                  <p className="font-medium mb-1 text-orange-700">메모</p>
-                  <p className="text-gray-600 whitespace-pre-wrap">
+                <div
+                  className="bg-orange-50 rounded-md"
+                  style={{ padding: `${0.75 * fontScale}rem` }}
+                >
+                  <p
+                    className={`text-orange-700 mb-1 ${getFontWeight()}`}
+                    style={{ fontSize: `${0.875 * fontScale}rem` }}
+                  >
+                    메모
+                  </p>
+                  <p
+                    className="text-gray-600 whitespace-pre-wrap"
+                    style={{ fontSize: `${0.875 * fontScale}rem` }}
+                  >
                     {selectedSchedule.notes}
                   </p>
                 </div>
               )}
 
               <DialogFooter className="mt-6 gap-2">
-                {/* ✨ 닫기 버튼 색상 변경 */}
                 <Button
                   variant="outline"
                   onClick={() => setIsDetailOpen(false)}
                   className="flex-1 border-orange-200 text-orange-600 hover:bg-orange-50"
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 >
                   닫기
                 </Button>
@@ -632,8 +758,16 @@ export function ScheduleManager() {
                   variant="destructive"
                   onClick={handleDelete}
                   className="flex-1"
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 >
-                  <Trash2 className="w-4 h-4 mr-2" /> 삭제
+                  <Trash2
+                    style={{
+                      width: 16 * fontScale,
+                      height: 16 * fontScale,
+                      marginRight: 8,
+                    }}
+                  />
+                  삭제
                 </Button>
               </DialogFooter>
             </div>

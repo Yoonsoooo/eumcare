@@ -20,6 +20,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { apiClient } from "../utils/api";
+import { getCurrentUser } from "../utils/auth";
 import { toast } from "sonner";
 
 interface WeeklyItem {
@@ -32,11 +33,12 @@ interface WeeklyItem {
   content?: string;
   is_completed: boolean;
   completed_at?: string;
+  author?: string;
 }
 
 interface DashboardProps {
   onNavigate?: (tab: "diary" | "schedule") => void;
-  fontScale?: number; // ✨ 추가
+  fontScale?: number;
 }
 
 export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
@@ -53,8 +55,8 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
     content: "",
     title: "",
   });
+  const [userName, setUserName] = useState("사용자");
 
-  // ✨ fontScale에 따른 font-weight 클래스
   const getFontWeight = () => {
     if (fontScale >= 1.5) return "font-semibold";
     if (fontScale >= 1.2) return "font-medium";
@@ -63,12 +65,38 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
 
   useEffect(() => {
     loadWeeklyData();
+    loadUserName();
   }, []);
+
+  async function loadUserName() {
+    const { user } = await getCurrentUser();
+    if (user?.user_metadata?.name) setUserName(user.user_metadata.name);
+  }
 
   async function loadWeeklyData() {
     try {
-      const { data: schedules } = await apiClient.getSchedules();
-      const { data: diaryEntries } = await apiClient.getDiaryEntries();
+      // 1. 데이터와 가족 정보 모두 가져오기
+      const [schedulesRes, diaryRes, familyRes] = await Promise.all([
+        apiClient.getSchedules(),
+        apiClient.getDiaryEntries(),
+        apiClient.getFamilyMembers(), // ✨ 가족 이름 매칭을 위해 추가
+      ]);
+
+      const schedules = schedulesRes.data || [];
+      const diaryEntries = diaryRes.data || [];
+      const familyMembers = familyRes.data || [];
+
+      const { user } = await getCurrentUser();
+      const myEmail = user?.email;
+
+      // ✨ 이름 찾기 헬퍼 함수
+      const getAuthorName = (email: string) => {
+        if (email === myEmail) return "나";
+        // 가족 목록에서 이메일로 이름 찾기
+        const member = familyMembers.find((m: any) => m.email === email);
+        // 가족 정보에 이름이 있으면 쓰고, 없으면 DB에 저장된 author_name 쓰고, 그것도 없으면 이메일 앞부분
+        return member?.name || email.split("@")[0];
+      };
 
       const items: WeeklyItem[] = [
         ...(schedules || []).map((s: any) => ({
@@ -81,6 +109,7 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
           content: s.notes,
           is_completed: s.is_completed || false,
           completed_at: s.completed_at,
+          author: getAuthorName(s.author_email), // ✨ 이름 변환 적용
         })),
         ...(diaryEntries || []).map((d: any) => ({
           id: d.id,
@@ -92,6 +121,7 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
           content: d.title === d.content ? "" : d.content,
           is_completed: d.is_completed || false,
           completed_at: d.completed_at,
+          author: getAuthorName(d.author_email), // ✨ 이름 변환 적용
         })),
       ].sort((a, b) => {
         const dateA = new Date(a.date + " " + a.time);
@@ -164,10 +194,10 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
           notes: newEntry.content,
         });
         setIsDialogOpen(false);
-        toast.success("추가됨!");
+        toast.success("추가되었습니다!");
         loadWeeklyData();
       } catch (error) {
-        toast.error("실패");
+        toast.error("실패했습니다");
       }
     } else {
       if (!newEntry.content) return;
@@ -178,13 +208,21 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
           newEntry.content
         );
         setIsDialogOpen(false);
-        toast.success("기록됨!");
+        toast.success("기록되었습니다!");
         loadWeeklyData();
       } catch (error) {
-        toast.error("실패");
+        toast.error("실패했습니다");
       }
     }
   };
+
+  // 스타일 헬퍼 함수
+  const getStyle = (baseSize: number) => ({
+    fontSize: `${baseSize * fontScale}rem`,
+    fontWeight: getFontWeight(),
+  });
+
+  const iconSize = { width: 24 * fontScale, height: 24 * fontScale };
 
   const getCategoryLabel = (type: string, category?: string) => {
     if (type === "diary") {
@@ -249,94 +287,71 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
-      {/* Quick Actions */}
+      {/* 상단 인사말 */}
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-gray-900" style={getStyle(1.5)}>
+            안녕하세요, <span className="text-orange-600">{userName}</span>님!
+          </h2>
+          <p className="text-gray-500 mt-1" style={getStyle(1)}>
+            오늘도 힘찬 하루 보내세요 🌞
+          </p>
+        </div>
+      </div>
+
+      {/* 바로가기 버튼 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Button
           variant="outline"
-          className="h-auto py-4 flex flex-col gap-2 hover:bg-orange-50 hover:border-orange-200"
+          className="h-auto py-4 flex flex-col gap-2 hover:bg-orange-50"
           onClick={() => handleOpenDialog("meal")}
         >
-          <Utensils
-            className="text-orange-500"
-            style={{ width: 24 * fontScale, height: 24 * fontScale }}
-          />
-          <span
-            className={`text-gray-700 ${getFontWeight()}`}
-            style={{ fontSize: `${0.875 * fontScale}rem` }}
-          >
+          <Utensils className="text-orange-500" style={iconSize} />
+          <span className="text-gray-700" style={getStyle(0.875)}>
             식사 기록
           </span>
         </Button>
         <Button
           variant="outline"
-          className="h-auto py-4 flex flex-col gap-2 hover:bg-amber-50 hover:border-amber-200"
+          className="h-auto py-4 flex flex-col gap-2 hover:bg-amber-50"
           onClick={() => handleOpenDialog("medicine")}
         >
-          <Pill
-            className="text-amber-500"
-            style={{ width: 24 * fontScale, height: 24 * fontScale }}
-          />
-          <span
-            className={`text-gray-700 ${getFontWeight()}`}
-            style={{ fontSize: `${0.875 * fontScale}rem` }}
-          >
+          <Pill className="text-amber-500" style={iconSize} />
+          <span className="text-gray-700" style={getStyle(0.875)}>
             약 복용
           </span>
         </Button>
         <Button
           variant="outline"
-          className="h-auto py-4 flex flex-col gap-2 hover:bg-purple-50 hover:border-purple-200"
+          className="h-auto py-4 flex flex-col gap-2 hover:bg-purple-50"
           onClick={() => handleOpenDialog("sleep")}
         >
-          <Moon
-            className="text-purple-500"
-            style={{ width: 24 * fontScale, height: 24 * fontScale }}
-          />
-          <span
-            className={`text-gray-700 ${getFontWeight()}`}
-            style={{ fontSize: `${0.875 * fontScale}rem` }}
-          >
+          <Moon className="text-purple-500" style={iconSize} />
+          <span className="text-gray-700" style={getStyle(0.875)}>
             수면
           </span>
         </Button>
         <Button
           variant="outline"
-          className="h-auto py-4 flex flex-col gap-2 hover:bg-rose-50 hover:border-rose-200"
+          className="h-auto py-4 flex flex-col gap-2 hover:bg-rose-50"
           onClick={() => handleOpenDialog("schedule")}
         >
-          <Calendar
-            className="text-rose-500"
-            style={{ width: 24 * fontScale, height: 24 * fontScale }}
-          />
-          <span
-            className={`text-gray-700 ${getFontWeight()}`}
-            style={{ fontSize: `${0.875 * fontScale}rem` }}
-          >
+          <Calendar className="text-rose-500" style={iconSize} />
+          <span className="text-gray-700" style={getStyle(0.875)}>
             일정 추가
           </span>
         </Button>
       </div>
 
-      {/* List */}
+      {/* 리스트 */}
       <Card className="border-orange-100">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle
-            className={getFontWeight()}
-            style={{ fontSize: `${1.25 * fontScale}rem` }}
-          >
-            이번 주 일정 및 기록
-          </CardTitle>
-          <Bell
-            className="text-orange-400"
-            style={{ width: 20 * fontScale, height: 20 * fontScale }}
-          />
+          <CardTitle style={getStyle(1.25)}>이번 주 일정 및 기록</CardTitle>
+          <Bell className="text-orange-400" style={iconSize} />
         </CardHeader>
         <CardContent className="space-y-3">
           {displayedItems.length === 0 ? (
-            <p
-              className={`text-center text-gray-500 py-8 ${getFontWeight()}`}
-              style={{ fontSize: `${1 * fontScale}rem` }}
-            >
+            <p className="text-center text-gray-500 py-8" style={getStyle(1)}>
               아직 일정이나 기록이 없습니다
             </p>
           ) : (
@@ -353,56 +368,61 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
                       : "bg-white border-orange-100 hover:bg-orange-50/50"
                   }`}
                 >
-                  {/* 아이콘 */}
                   <div
                     className={`rounded-full flex items-center justify-center shrink-0 ${
                       item.is_completed
                         ? "bg-green-100"
                         : getBackgroundColor(item.type, item.category)
                     }`}
-                    style={{ width: 44 * fontScale, height: 44 * fontScale }}
+                    style={{ width: 40 * fontScale, height: 40 * fontScale }}
                   >
                     {item.is_completed ? (
                       <CheckCircle2
                         className="text-green-600"
-                        style={{
-                          width: 24 * fontScale,
-                          height: 24 * fontScale,
-                        }}
+                        style={iconSize}
                       />
                     ) : (
                       getIcon(item.type, item.category)
                     )}
                   </div>
 
-                  {/* 내용 */}
                   <div className="flex-1 min-w-0">
+                    {/* 상단 정보 (뱃지, 작성자, 날짜) */}
                     <div className="flex items-center gap-2 mb-1">
                       <span
-                        className={`px-2 py-0.5 rounded border whitespace-nowrap ${getFontWeight()} ${
+                        className={`px-2 py-0.5 rounded border whitespace-nowrap ${
                           item.is_completed
                             ? "bg-green-100 text-green-700 border-green-200"
                             : "bg-white text-orange-700 border-orange-200"
                         }`}
-                        style={{ fontSize: `${0.75 * fontScale}rem` }}
+                        style={{ ...getStyle(0.75), fontWeight: "bold" }}
                       >
                         {getCategoryLabel(item.type, item.category)}
                       </span>
+
                       <span
-                        className="text-gray-500"
-                        style={{ fontSize: `${0.75 * fontScale}rem` }}
+                        className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded font-medium"
+                        style={getStyle(0.7)}
                       >
+                        {item.author}
+                      </span>
+
+                      <span className="text-gray-500" style={getStyle(0.75)}>
                         {item.date}
                       </span>
                     </div>
 
+                    {/* ✨ 여기에 구분선 추가! (연한 오렌지색 선) */}
+                    <div className="h-px bg-orange-100 my-2 w-full" />
+
+                    {/* 제목 및 내용 */}
                     <h4
-                      className={`truncate ${getFontWeight()} ${
+                      className={`truncate ${
                         item.is_completed
                           ? "text-gray-400 line-through"
                           : "text-gray-900"
                       }`}
-                      style={{ fontSize: `${1 * fontScale}rem` }}
+                      style={getStyle(1)}
                     >
                       {item.title}
                     </h4>
@@ -410,7 +430,7 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
                     {item.content && item.content !== item.title && (
                       <p
                         className="text-gray-600 mt-1 line-clamp-1"
-                        style={{ fontSize: `${0.875 * fontScale}rem` }}
+                        style={getStyle(0.875)}
                       >
                         {item.content}
                       </p>
@@ -418,19 +438,18 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
 
                     {item.is_completed && item.completed_at && (
                       <p
-                        className={`text-green-600 mt-1 ${getFontWeight()}`}
-                        style={{ fontSize: `${0.85 * fontScale}rem` }}
+                        className="text-green-600 mt-1"
+                        style={{ ...getStyle(0.85), fontWeight: "bold" }}
                       >
                         ✅ {formatTime(item.completed_at)} 완료함
                       </p>
                     )}
                   </div>
 
-                  {/* 시간 및 체크 버튼 */}
                   <div className="flex flex-col items-end gap-2">
                     <div
-                      className={`flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-orange-100 whitespace-nowrap shrink-0 ${getFontWeight()}`}
-                      style={{ fontSize: `${0.875 * fontScale}rem` }}
+                      className="flex items-center gap-1 bg-white px-2 py-1 rounded-lg border border-orange-100 whitespace-nowrap shrink-0"
+                      style={getStyle(0.875)}
                     >
                       <Clock
                         style={{
@@ -488,7 +507,7 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
         </CardContent>
       </Card>
 
-      {/* Dialog */}
+      {/* Add Entry Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -509,7 +528,6 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
                   제목
                 </Label>
                 <Input
-                  placeholder="일정 제목을 입력하세요"
                   value={newEntry.title}
                   onChange={(e) =>
                     setNewEntry({ ...newEntry, title: e.target.value })
@@ -551,15 +569,6 @@ export function Dashboard({ onNavigate, fontScale = 1 }: DashboardProps) {
                 {dialogType === "schedule" ? "메모" : "내용"}
               </Label>
               <Textarea
-                placeholder={
-                  dialogType === "meal"
-                    ? "오늘 드신 음식을 기록해주세요"
-                    : dialogType === "medicine"
-                    ? "복용한 약을 기록해주세요"
-                    : dialogType === "sleep"
-                    ? "수면 상태를 기록해주세요"
-                    : "메모를 입력하세요"
-                }
                 rows={4}
                 value={newEntry.content}
                 onChange={(e) =>

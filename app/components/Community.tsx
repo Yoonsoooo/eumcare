@@ -11,13 +11,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -37,13 +30,11 @@ interface Post {
   likedBy: string[];
 }
 
-const CATEGORIES = [
-  { value: "자유", label: "💬 자유", emoji: "💬" },
-  { value: "팁 공유", label: "💡 팁 공유", emoji: "💡" },
-  { value: "질문", label: "❓ 질문", emoji: "❓" },
-];
+interface CommunityProps {
+  fontScale?: number; // ✨ 추가
+}
 
-export function Community() {
+export function Community({ fontScale = 1 }: CommunityProps) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -52,6 +43,12 @@ export function Community() {
     content: "",
     category: "자유",
   });
+
+  const getFontWeight = () => {
+    if (fontScale >= 1.5) return "font-semibold";
+    if (fontScale >= 1.2) return "font-medium";
+    return "font-normal";
+  };
 
   useEffect(() => {
     loadPosts();
@@ -83,7 +80,6 @@ export function Community() {
       setIsDialogOpen(false);
       toast.success("글이 작성되었습니다!");
     } catch (error) {
-      console.error("Failed to add post:", error);
       toast.error("글 작성에 실패했습니다");
     }
   };
@@ -91,20 +87,12 @@ export function Community() {
   const handleLike = async (postId: string) => {
     try {
       const { data } = await apiClient.likePost(postId);
-
       setPosts(
-        posts.map((post) => {
-          if (post.id === postId) {
-            return {
-              ...post,
-              likes: data.likes,
-            };
-          }
-          return post;
-        })
+        posts.map((post) =>
+          post.id === postId ? { ...post, likes: data.likes } : post
+        )
       );
     } catch (error) {
-      console.error("Failed to like post:", error);
       toast.error("좋아요에 실패했습니다");
     }
   };
@@ -128,8 +116,6 @@ export function Community() {
         return "bg-amber-50 text-amber-600";
       case "질문":
         return "bg-rose-50 text-rose-600";
-      case "자유":
-        return "bg-orange-50 text-orange-600";
       default:
         return "bg-orange-50 text-orange-600";
     }
@@ -138,52 +124,65 @@ export function Community() {
   return (
     <div className="space-y-4 pb-20 md:pb-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">커뮤니티</h2>
+        <h2
+          className={`font-bold ${getFontWeight()}`}
+          style={{ fontSize: `${1.25 * fontScale}rem` }}
+        >
+          커뮤니티
+        </h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <Plus className="w-4 h-4 mr-2" />
+            <Button
+              className="bg-orange-500 hover:bg-orange-600"
+              style={{ fontSize: `${0.875 * fontScale}rem` }}
+            >
+              <Plus
+                style={{
+                  width: 16 * fontScale,
+                  height: 16 * fontScale,
+                  marginRight: 8,
+                }}
+              />
               글쓰기
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>✍️ 새 글 작성</DialogTitle>
+              <DialogTitle style={{ fontSize: `${1.125 * fontScale}rem` }}>
+                ✍️ 새 글 작성
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
-              {/* ✨ Select 컴포넌트로 변경 */}
               <div className="space-y-2">
-                <Label>카테고리</Label>
-                <Select
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  카테고리
+                </Label>
+                <Input
+                  placeholder="카테고리를 입력하세요"
                   value={newPost.category}
-                  onValueChange={(value) =>
-                    setNewPost({ ...newPost, category: value })
+                  onChange={(e) =>
+                    setNewPost({ ...newPost, category: e.target.value })
                   }
-                >
-                  <SelectTrigger className="w-full border-orange-200 focus:ring-orange-500">
-                    <SelectValue placeholder="카테고리를 선택하세요" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((category) => (
-                      <SelectItem key={category.value} value={category.value}>
-                        {category.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  style={{ fontSize: `${1 * fontScale}rem` }}
+                />
               </div>
               <div className="space-y-2">
-                <Label>제목</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  제목
+                </Label>
                 <Input
                   placeholder="제목을 입력하세요"
                   value={newPost.title}
                   onChange={(e) =>
                     setNewPost({ ...newPost, title: e.target.value })
                   }
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 />
               </div>
               <div className="space-y-2">
-                <Label>내용</Label>
+                <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                  내용
+                </Label>
                 <Textarea
                   placeholder="내용을 입력하세요"
                   value={newPost.content}
@@ -191,6 +190,7 @@ export function Community() {
                     setNewPost({ ...newPost, content: e.target.value })
                   }
                   rows={6}
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 />
               </div>
               <div className="flex gap-2">
@@ -198,12 +198,14 @@ export function Community() {
                   variant="outline"
                   className="flex-1 border-orange-200 text-orange-600 hover:bg-orange-50"
                   onClick={() => setIsDialogOpen(false)}
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 >
                   취소
                 </Button>
                 <Button
                   className="flex-1 bg-orange-500 hover:bg-orange-600"
                   onClick={handleAddPost}
+                  style={{ fontSize: `${1 * fontScale}rem` }}
                 >
                   작성
                 </Button>
@@ -213,43 +215,45 @@ export function Community() {
         </Dialog>
       </div>
 
-      {/* Search */}
+      {/* 검색 */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400"
+          style={{ width: 16 * fontScale, height: 16 * fontScale }}
+        />
         <Input
           placeholder="검색어를 입력하세요"
-          className="pl-10 border-orange-100 focus:border-orange-300 focus:ring-orange-200"
+          className="border-orange-100 focus:border-orange-300"
+          style={{
+            paddingLeft: `${2.5 * fontScale}rem`,
+            fontSize: `${1 * fontScale}rem`,
+          }}
         />
       </div>
 
-      {/* Category Tabs */}
+      {/* 탭 */}
       <Tabs defaultValue="all" className="w-full">
         <TabsList className="w-full grid grid-cols-4 bg-orange-50">
-          <TabsTrigger
-            value="all"
-            className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-          >
-            전체
-          </TabsTrigger>
-          <TabsTrigger
-            value="tips"
-            className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-          >
-            팁 공유
-          </TabsTrigger>
-          <TabsTrigger
-            value="questions"
-            className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-          >
-            질문
-          </TabsTrigger>
-          <TabsTrigger
-            value="free"
-            className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-          >
-            자유
-          </TabsTrigger>
+          {["전체", "팁 공유", "질문", "자유"].map((tab, idx) => (
+            <TabsTrigger
+              key={tab}
+              value={
+                idx === 0
+                  ? "all"
+                  : idx === 1
+                  ? "tips"
+                  : idx === 2
+                  ? "questions"
+                  : "free"
+              }
+              className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+              style={{ fontSize: `${0.875 * fontScale}rem` }}
+            >
+              {tab}
+            </TabsTrigger>
+          ))}
         </TabsList>
+
         <TabsContent value="all" className="space-y-3 mt-4">
           {loading ? (
             <div className="text-center py-8">
@@ -258,7 +262,13 @@ export function Community() {
             </div>
           ) : posts.length === 0 ? (
             <Card className="border-orange-100">
-              <CardContent className="p-8 text-center text-gray-500">
+              <CardContent
+                className="text-center text-gray-500"
+                style={{
+                  padding: `${2 * fontScale}rem`,
+                  fontSize: `${1 * fontScale}rem`,
+                }}
+              >
                 아직 작성된 글이 없습니다.
               </CardContent>
             </Card>
@@ -268,58 +278,100 @@ export function Community() {
                 key={post.id}
                 className="hover:shadow-md hover:border-orange-200 transition-all border-orange-100"
               >
-                <CardContent className="p-4">
+                <CardContent style={{ padding: `${1 * fontScale}rem` }}>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                          <span className="text-sm text-orange-600 font-medium">
+                        <div
+                          className="rounded-full bg-orange-100 flex items-center justify-center"
+                          style={{
+                            width: 32 * fontScale,
+                            height: 32 * fontScale,
+                          }}
+                        >
+                          <span
+                            className="text-orange-600 font-medium"
+                            style={{ fontSize: `${0.875 * fontScale}rem` }}
+                          >
                             {post.authorName[0]}
                           </span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium">
+                          <div
+                            className={`${getFontWeight()}`}
+                            style={{ fontSize: `${0.875 * fontScale}rem` }}
+                          >
                             {post.authorName}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div
+                            className="text-gray-500"
+                            style={{ fontSize: `${0.75 * fontScale}rem` }}
+                          >
                             {getTimeAgo(post.createdAt)}
                           </div>
                         </div>
                       </div>
                       <span
-                        className={`px-2 py-1 text-xs rounded font-medium ${getCategoryColor(
+                        className={`rounded ${getFontWeight()} ${getCategoryColor(
                           post.category
                         )}`}
+                        style={{
+                          fontSize: `${0.75 * fontScale}rem`,
+                          padding: `${0.25 * fontScale}rem ${
+                            0.5 * fontScale
+                          }rem`,
+                        }}
                       >
                         {post.category}
                       </span>
                     </div>
+
                     <div>
-                      <h3 className="text-gray-900 font-semibold mb-1">
+                      <h3
+                        className={`text-gray-900 mb-1 ${getFontWeight()}`}
+                        style={{ fontSize: `${1 * fontScale}rem` }}
+                      >
                         {post.title}
                       </h3>
-                      <p className="text-sm text-gray-600 line-clamp-2">
+                      <p
+                        className="text-gray-600 line-clamp-2"
+                        style={{ fontSize: `${0.875 * fontScale}rem` }}
+                      >
                         {post.content}
                       </p>
                     </div>
+
                     <div className="flex items-center gap-4 pt-2 border-t border-orange-100">
                       <button
                         onClick={() => handleLike(post.id)}
-                        className={`flex items-center gap-1 text-sm ${
+                        className={`flex items-center gap-1 transition-colors ${
                           post.likedBy.includes("나")
                             ? "text-rose-500"
                             : "text-gray-500 hover:text-rose-500"
-                        } transition-colors`}
+                        }`}
+                        style={{ fontSize: `${0.875 * fontScale}rem` }}
                       >
                         <Heart
-                          className={`w-4 h-4 ${
+                          style={{
+                            width: 16 * fontScale,
+                            height: 16 * fontScale,
+                          }}
+                          className={
                             post.likedBy.includes("나") ? "fill-current" : ""
-                          }`}
+                          }
                         />
                         <span>{post.likes}</span>
                       </button>
-                      <button className="flex items-center gap-1 text-sm text-gray-500 hover:text-orange-600 transition-colors">
-                        <MessageCircle className="w-4 h-4" />
+                      <button
+                        className="flex items-center gap-1 text-gray-500 hover:text-orange-600 transition-colors"
+                        style={{ fontSize: `${0.875 * fontScale}rem` }}
+                      >
+                        <MessageCircle
+                          style={{
+                            width: 16 * fontScale,
+                            height: 16 * fontScale,
+                          }}
+                        />
                         <span>{post.comments}</span>
                       </button>
                     </div>
@@ -329,27 +381,27 @@ export function Community() {
             ))
           )}
         </TabsContent>
-        <TabsContent value="tips" className="mt-4">
-          <Card className="border-orange-100">
-            <CardContent className="p-8 text-center text-gray-500">
-              💡 팁 공유 게시글이 여기에 표시됩니다
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="questions" className="mt-4">
-          <Card className="border-orange-100">
-            <CardContent className="p-8 text-center text-gray-500">
-              ❓ 질문 게시글이 여기에 표시됩니다
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="free" className="mt-4">
-          <Card className="border-orange-100">
-            <CardContent className="p-8 text-center text-gray-500">
-              💬 자유 게시글이 여기에 표시됩니다
-            </CardContent>
-          </Card>
-        </TabsContent>
+
+        {["tips", "questions", "free"].map((tab) => (
+          <TabsContent key={tab} value={tab} className="mt-4">
+            <Card className="border-orange-100">
+              <CardContent
+                className="text-center text-gray-500"
+                style={{
+                  padding: `${2 * fontScale}rem`,
+                  fontSize: `${1 * fontScale}rem`,
+                }}
+              >
+                {tab === "tips"
+                  ? "💡 팁 공유"
+                  : tab === "questions"
+                  ? "❓ 질문"
+                  : "💬 자유"}{" "}
+                게시글이 여기에 표시됩니다
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
       </Tabs>
     </div>
   );
