@@ -48,6 +48,8 @@ export class APIClient {
         name: user.user_metadata?.name || "",
         phone: user.user_metadata?.phone || "",
         createdAt: user.created_at,
+        // 프로필 이미지 URL이 있다면 반환 (DB 컬럼명 확인 필요: avatar_url)
+        avatarUrl: user.user_metadata?.avatar_url || null,
       },
       error: null,
     };
@@ -72,6 +74,48 @@ export class APIClient {
     if (error) return { data: null, error: error.message };
     return { data, error: null };
   }
+
+  // ▼▼▼ [추가됨] 사진 업로드 함수 ▼▼▼
+  /**
+   * 멤버 사진 업로드 기능
+   * 전제조건:
+   * 1. Supabase Storage에 'avatars'라는 이름의 Public 버킷이 있어야 합니다.
+   * 2. profiles 테이블에 'avatar_url' 컬럼이 존재해야 합니다.
+   */
+  async uploadMemberPhoto(memberId: string, formData: FormData) {
+    const file = formData.get("file") as File;
+    if (!file) {
+      throw new Error("업로드할 파일이 없습니다.");
+    }
+
+    // 파일 확장자 추출
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${memberId}-${Date.now()}.${fileExt}`;
+
+    // ⚠️ 버킷명 확인! 'profiles'로 되어있는지 체크
+    const { data, error } = await supabase.storage
+      .from("profiles") // ✅ 이 이름이 생성한 버킷명과 일치해야 함!
+      .upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (error) {
+      console.error("Upload error:", error);
+      throw error;
+    }
+
+    // Public URL 가져오기
+    const { data: urlData } = supabase.storage
+      .from("profiles")
+      .getPublicUrl(fileName);
+
+    // DB에 URL 저장 (필요시)
+    // await this.updateMemberProfile(memberId, { profileImage: urlData.publicUrl });
+
+    return { data: urlData };
+  }
+  // ▲▲▲ [추가 완료] ▲▲▲
 
   // ... (Diary, Schedule 기본 함수들 유지) ...
   async createDiary(elderlyCareRecipientName: string) {
@@ -275,7 +319,7 @@ export class APIClient {
     return { success: true };
   }
 
-  // ✨ [수정] 가족 목록 가져오기 (관리자 로직 + 이름)
+  // ✨ 대안: 초대 관계 기반 관리자 판단
   async getFamilyMembers() {
     const {
       data: { user },
@@ -287,6 +331,7 @@ export class APIClient {
       .select("*")
       .eq("sender_email", user.email)
       .eq("status", "accepted");
+
     const { data: receivedInvites } = await supabase
       .from("invitations")
       .select("*")
@@ -301,44 +346,70 @@ export class APIClient {
       ...new Set([user.email, ...familyList.map((f) => f.email)]),
     ];
 
+    // ✨ 초대받은 적 있는 사람들의 이메일 수집
+    const allReceiverEmails = new Set<string>();
+
+    // 가족 내 모든 초대 관계 조회
+    const { data: allInvites } = await supabase
+      .from("invitations")
+      .select("sender_email, receiver_email")
+      .eq("status", "accepted")
+      .or(
+        `sender_email.in.(${uniqueEmails.join(
+          ","
+        )}),receiver_email.in.(${uniqueEmails.join(",")})`
+      );
+
+    allInvites?.forEach((inv) => {
+      allReceiverEmails.add(inv.receiver_email);
+    });
+
     const { data: profiles } = await supabase
       .from("profiles")
       .select("*")
       .in("email", uniqueEmails);
-
-    // 👑 관리자(다이어리 생성자) 확인을 위해 diaries 테이블 조회
-    // (가족 멤버 중 diaries 테이블에 owner_id로 등록된 사람이 관리자)
-    const memberIds = profiles?.map((p) => p.id) || [];
-    const { data: owners } = await supabase
-      .from("diaries")
-      .select("owner_id")
-      .in("owner_id", memberIds);
-    const realOwnerIds = owners?.map((o) => o.owner_id) || [];
 
     const membersWithActivity = await Promise.all(
       uniqueEmails.map(async (email) => {
         const profile = profiles?.find((p) => p.email === email);
         const activity = await this.getMemberActivity(email);
 
-        // 프로필 ID가 diaries 테이블의 owner_id 목록에 있으면 관리자!
-        const isRealOwner = profile ? realOwnerIds.includes(profile.id) : false;
+        // ✨ 관리자 = 초대받은 적 없는 사람 (= 원래 초대를 시작한 사람)
+        const isOwner = !allReceiverEmails.has(email);
 
         return {
           id: profile?.id || email,
           name: profile?.name || email.split("@")[0],
           email: email,
           phone: profile?.phone || "",
-          isOwner: isRealOwner, // ✨ 진짜 관리자 여부
+          // 이미지 URL 추가 (DB에 avatar_url 컬럼이 있다고 가정)
+          avatarUrl: profile?.avatar_url || null,
+          isOwner: isOwner,
+          isMe: email === user.email,
           joinedDate: profile?.updated_at || new Date().toISOString(),
-          activity, // ✨ 상세 활동 통계
+          activity,
         };
       })
     );
 
-    // 관리자(isOwner=true)를 맨 위로
-    membersWithActivity.sort((a, b) => (a.isOwner ? -1 : 1));
+    membersWithActivity.sort((a, b) => {
+      if (a.isOwner && !b.isOwner) return -1;
+      if (!a.isOwner && b.isOwner) return 1;
+      return 0;
+    });
 
     return { data: membersWithActivity };
+  }
+
+  // 가족 구성원 삭제
+  async removeFamilyMember(memberId: string) {
+    const { error } = await supabase
+      .from("family_members")
+      .delete()
+      .eq("id", memberId);
+
+    if (error) throw error;
+    return { success: true };
   }
 
   // ✨ [수정] 활동 통계 (상세하게 카운트)

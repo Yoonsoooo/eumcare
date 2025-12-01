@@ -20,6 +20,8 @@ import {
   Users,
   Camera,
   Upload,
+  Trash2, // ✨ 추가
+  AlertTriangle, // ✨ 추가
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -78,13 +80,18 @@ export function FamilyMembers() {
   const [inviteName, setInviteName] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // ✨ 구성원 상세 정보 모달
+  // 구성원 상세 정보 모달
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [isMemberDetailOpen, setIsMemberDetailOpen] = useState(false);
 
-  // ✨ 프로필 사진 업로드
+  // 프로필 사진 업로드
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // ✨ 삭제 관련 상태 추가
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadMembers();
@@ -171,20 +178,51 @@ export function FamilyMembers() {
     setIsMemberDetailOpen(true);
   };
 
-  // ✨ 프로필 사진 업로드 핸들러
+  // ✨ 삭제 다이얼로그 열기
+  const handleOpenDeleteDialog = (member: Member) => {
+    setMemberToDelete(member);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // ✨ 구성원 삭제 핸들러
+  const handleDeleteMember = async () => {
+    if (!memberToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await apiClient.removeFamilyMember(memberToDelete.id);
+
+      // 로컬 상태에서 제거
+      setMembers(members.filter((m) => m.id !== memberToDelete.id));
+
+      // 다이얼로그 닫기
+      setIsDeleteDialogOpen(false);
+      setIsMemberDetailOpen(false);
+      setMemberToDelete(null);
+      setSelectedMember(null);
+
+      toast.success(`${memberToDelete.name}님을 구성원에서 삭제했습니다`);
+    } catch (error: any) {
+      console.error("Failed to delete member:", error);
+      toast.error(error.message || "구성원 삭제에 실패했습니다");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // FamilyMembers.tsx - handlePhotoUpload 함수 수정
+
   const handlePhotoUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
     if (!file || !selectedMember) return;
 
-    // 파일 크기 체크 (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error("파일 크기는 5MB 이하여야 합니다");
       return;
     }
 
-    // 이미지 파일인지 체크
     if (!file.type.startsWith("image/")) {
       toast.error("이미지 파일만 업로드 가능합니다");
       return;
@@ -193,12 +231,12 @@ export function FamilyMembers() {
     setUploadingPhoto(true);
     try {
       const formData = new FormData();
-      formData.append("photo", file);
+      formData.append("file", file); // ✅ "photo" → "file"로 변경!
       formData.append("memberId", selectedMember.id);
 
       await apiClient.uploadMemberPhoto(selectedMember.id, formData);
 
-      // 로컬 상태 업데이트 (미리보기)
+      // 로컬 미리보기 업데이트
       const reader = new FileReader();
       reader.onload = (e) => {
         const imageUrl = e.target?.result as string;
@@ -224,7 +262,6 @@ export function FamilyMembers() {
     (inv) => inv.status === "pending"
   );
 
-  // 전화번호 포맷팅
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "-";
     const cleaned = phone.replace(/\D/g, "");
@@ -236,7 +273,6 @@ export function FamilyMembers() {
     return phone;
   };
 
-  // 날짜 포맷팅
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
@@ -247,7 +283,6 @@ export function FamilyMembers() {
     });
   };
 
-  // 마지막 활동 시간
   const getLastActiveText = (lastActiveAt: string | null) => {
     if (!lastActiveAt) return "활동 기록 없음";
     const now = new Date();
@@ -262,7 +297,6 @@ export function FamilyMembers() {
     return `${diffDays}일 전 활동`;
   };
 
-  // ✨ 총 활동 계산
   const getTotalActivity = (activity?: MemberActivity) => {
     if (!activity) return 0;
     return (
@@ -276,10 +310,11 @@ export function FamilyMembers() {
 
   return (
     <div className="space-y-4 pb-20 md:pb-6">
+      {/* ... 상단 부분은 동일 ... */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">가족 구성원</h2>
         <div className="flex items-center gap-2">
-          {/* ✨ 받은 초대 버튼 */}
+          {/* 받은 초대 버튼 */}
           <Dialog
             open={isInvitationsDialogOpen}
             onOpenChange={setIsInvitationsDialogOpen}
@@ -376,7 +411,7 @@ export function FamilyMembers() {
             </DialogContent>
           </Dialog>
 
-          {/* ✨ 초대하기 버튼 */}
+          {/* 초대하기 버튼 */}
           <Dialog
             open={isInviteDialogOpen}
             onOpenChange={setIsInviteDialogOpen}
@@ -392,7 +427,6 @@ export function FamilyMembers() {
                 <DialogTitle>👨‍👩‍👧‍👦 가족 구성원 초대</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 mt-4">
-                {/* ✨ 안내 문구 */}
                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
                   <p className="text-sm text-orange-800">
                     💡 초대할 가족의 정보를 입력하세요. 이메일은 필수이며,
@@ -400,7 +434,6 @@ export function FamilyMembers() {
                   </p>
                 </div>
 
-                {/* 이름 입력 */}
                 <div className="space-y-2">
                   <Label className="text-gray-700">이름</Label>
                   <Input
@@ -412,7 +445,6 @@ export function FamilyMembers() {
                   />
                 </div>
 
-                {/* 전화번호 입력 */}
                 <div className="space-y-2">
                   <Label className="text-gray-700">전화번호</Label>
                   <div className="relative">
@@ -427,7 +459,6 @@ export function FamilyMembers() {
                   </div>
                 </div>
 
-                {/* 이메일 입력 */}
                 <div className="space-y-2">
                   <Label className="text-gray-700">
                     이메일 주소 <span className="text-red-500">*</span>
@@ -541,7 +572,6 @@ export function FamilyMembers() {
                         </span>
                       )}
                     </div>
-                    {/* ✨ 전화번호와 이메일 세로 배치 */}
                     <div className="flex flex-col gap-1 mt-1.5 text-sm text-gray-500">
                       <div className="flex items-center gap-1">
                         <Phone className="w-3 h-3 text-orange-400" />
@@ -571,12 +601,11 @@ export function FamilyMembers() {
         )}
       </div>
 
-      {/* ✨ 구성원 상세 정보 모달 */}
+      {/* ✨ 구성원 상세 정보 모달 - 삭제 버튼 추가 */}
       <Dialog open={isMemberDetailOpen} onOpenChange={setIsMemberDetailOpen}>
         <DialogContent className="border-orange-100 max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              {/* ✨ 프로필 사진 업로드 가능한 아바타 */}
               <div className="relative group">
                 <Avatar className="w-14 h-14">
                   {selectedMember?.profileImage ? (
@@ -660,7 +689,7 @@ export function FamilyMembers() {
                 </CardContent>
               </Card>
 
-              {/* ✨ 활동 통계 - 6개 항목으로 변경 */}
+              {/* 활동 통계 */}
               <Card className="border-orange-100">
                 <CardContent className="p-4 space-y-3">
                   <h4 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -721,15 +750,13 @@ export function FamilyMembers() {
                   </h4>
                   <div className="space-y-2 text-sm">
                     {selectedMember.activity?.lastActiveAt ? (
-                      <>
-                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                          <Activity className="w-4 h-4 text-orange-400" />
-                          <span className="text-gray-600">마지막 활동</span>
-                          <span className="ml-auto text-gray-900">
-                            {formatDate(selectedMember.activity.lastActiveAt)}
-                          </span>
-                        </div>
-                      </>
+                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                        <Activity className="w-4 h-4 text-orange-400" />
+                        <span className="text-gray-600">마지막 활동</span>
+                        <span className="ml-auto text-gray-900">
+                          {formatDate(selectedMember.activity.lastActiveAt)}
+                        </span>
+                      </div>
                     ) : (
                       <div className="text-center py-4 text-gray-400">
                         아직 활동 기록이 없습니다
@@ -763,15 +790,106 @@ export function FamilyMembers() {
                   }}
                 >
                   <Mail className="w-4 h-4 mr-2" />
-                  이메일 보내기
+                  이메일
                 </Button>
               </div>
+
+              {/* ✨ 구성원 삭제 버튼 - 본인(관리자)은 삭제 불가 */}
+              {!selectedMember.isOwner && (
+                <Button
+                  variant="outline"
+                  className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  onClick={() => handleOpenDeleteDialog(selectedMember)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  구성원에서 삭제
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* ✨ 전체 활동 통계 - 6개 항목으로 변경 */}
+      {/* ✨ 삭제 확인 다이얼로그 */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="border-red-100 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+              구성원 삭제
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {/* 삭제 대상 정보 */}
+            <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg border border-red-100">
+              <Avatar className="w-10 h-10">
+                {memberToDelete?.profileImage ? (
+                  <AvatarImage
+                    src={memberToDelete.profileImage}
+                    alt={memberToDelete.name}
+                  />
+                ) : null}
+                <AvatarFallback className="bg-red-100 text-red-600 font-medium">
+                  {memberToDelete?.name[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium text-gray-900">
+                  {memberToDelete?.name}
+                </p>
+                <p className="text-sm text-gray-500">{memberToDelete?.email}</p>
+              </div>
+            </div>
+
+            {/* 경고 메시지 */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                ⚠️ <strong>{memberToDelete?.name}</strong>님을 가족 구성원에서
+                삭제하시겠습니까?
+              </p>
+              <ul className="text-xs text-yellow-700 mt-2 space-y-1 list-disc list-inside">
+                <li>삭제 후에도 해당 구성원의 기존 기록은 유지됩니다</li>
+                <li>다시 초대하여 구성원으로 추가할 수 있습니다</li>
+              </ul>
+            </div>
+
+            {/* 액션 버튼 */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 border-gray-200"
+                onClick={() => {
+                  setIsDeleteDialogOpen(false);
+                  setMemberToDelete(null);
+                }}
+                disabled={isDeleting}
+              >
+                취소
+              </Button>
+              <Button
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                onClick={handleDeleteMember}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    삭제 중...
+                  </span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    삭제하기
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 전체 활동 통계 */}
       {members.length > 0 && (
         <Card className="border-orange-100">
           <CardContent className="p-4">
@@ -835,7 +953,6 @@ export function FamilyMembers() {
               ))}
             </div>
 
-            {/* ✨ 범례 - 6개 항목 */}
             <div className="flex flex-wrap items-center justify-center gap-3 mt-4 pt-3 border-t border-orange-100">
               <div className="flex items-center gap-1 text-xs text-gray-500">
                 <Utensils className="w-3 h-3 text-orange-400" />
