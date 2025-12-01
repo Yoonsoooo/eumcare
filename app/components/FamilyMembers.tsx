@@ -17,6 +17,14 @@ import {
   Camera,
   Trash2,
   AlertTriangle,
+  ChevronRight,
+  X,
+  Clock,
+  Image as ImageIcon,
+  MessageCircle,
+  Heart,
+  BarChart3,
+  User,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -47,7 +55,7 @@ interface Member {
   name: string;
   email: string;
   phone?: string;
-  avatarUrl?: string; // ✨ [수정] profileImage -> avatarUrl (API와 통일)
+  avatarUrl?: string;
   isOwner: boolean;
   joinedDate: string;
   activity?: MemberActivity;
@@ -63,6 +71,58 @@ interface Invitation {
   sender_email?: string;
   created_at?: string;
 }
+
+// 활동 기록 인터페이스들
+interface MealRecord {
+  id: string;
+  mealType: string;
+  description: string;
+  photoUrl?: string;
+  createdAt: string;
+}
+
+interface ScheduleRecord {
+  id: string;
+  title: string;
+  date: string;
+  time?: string;
+  description?: string;
+  createdAt: string;
+}
+
+interface MedicationRecord {
+  id: string;
+  medicationName: string;
+  dosage: string;
+  takenAt: string;
+  createdAt: string;
+}
+
+interface SleepRecord {
+  id: string;
+  sleepTime: string;
+  wakeTime: string;
+  quality: number;
+  note?: string;
+  createdAt: string;
+}
+
+interface CommunityRecord {
+  id: string;
+  title: string;
+  content: string;
+  likesCount: number;
+  commentsCount: number;
+  createdAt: string;
+}
+
+type ActivityType =
+  | "meal"
+  | "schedule"
+  | "medication"
+  | "sleep"
+  | "community"
+  | "total";
 
 export function FamilyMembers() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -88,6 +148,18 @@ export function FamilyMembers() {
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 활동 상세 보기 관련 상태
+  const [isActivityDetailOpen, setIsActivityDetailOpen] = useState(false);
+  const [selectedActivityType, setSelectedActivityType] =
+    useState<ActivityType | null>(null);
+  const [activityRecords, setActivityRecords] = useState<any[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+
+  // 전체 통계 보기 모드 (individual: 개인별, total: 전체 합산)
+  const [statsViewMode, setStatsViewMode] = useState<"individual" | "total">(
+    "total"
+  );
+
   useEffect(() => {
     loadMembers();
     loadInvitations();
@@ -96,7 +168,6 @@ export function FamilyMembers() {
   async function loadMembers() {
     try {
       const { data } = await apiClient.getFamilyMembers();
-      // API에서 받아온 데이터가 Member 인터페이스와 맞는지(avatarUrl 등) 확인
       setMembers(data || []);
     } catch (error) {
       console.error("Failed to load family members:", error);
@@ -113,6 +184,255 @@ export function FamilyMembers() {
       console.error("Failed to load invitations:", error);
     }
   }
+
+  // 전체 합산 통계 계산
+  const getTotalStats = () => {
+    return members.reduce(
+      (acc, member) => {
+        return {
+          mealCount: acc.mealCount + (member.activity?.mealCount || 0),
+          scheduleCount:
+            acc.scheduleCount + (member.activity?.scheduleCount || 0),
+          medicationCount:
+            acc.medicationCount + (member.activity?.medicationCount || 0),
+          sleepCount: acc.sleepCount + (member.activity?.sleepCount || 0),
+          communityCount:
+            acc.communityCount + (member.activity?.communityCount || 0),
+        };
+      },
+      {
+        mealCount: 0,
+        scheduleCount: 0,
+        medicationCount: 0,
+        sleepCount: 0,
+        communityCount: 0,
+      }
+    );
+  };
+
+  const totalStats = getTotalStats();
+  const grandTotal =
+    totalStats.mealCount +
+    totalStats.scheduleCount +
+    totalStats.medicationCount +
+    totalStats.sleepCount +
+    totalStats.communityCount;
+
+  // 활동 상세 기록 불러오기
+  const loadActivityRecords = async (memberId: string, type: ActivityType) => {
+    setLoadingRecords(true);
+    setActivityRecords([]);
+
+    try {
+      let data: any[] = [];
+
+      switch (type) {
+        case "meal":
+          // API 호출 - 실제 API에 맞게 수정 필요
+          const mealResponse = await apiClient.getMemberMeals?.(memberId);
+          data = mealResponse?.data || [];
+          break;
+        case "schedule":
+          const scheduleResponse = await apiClient.getMemberSchedules?.(
+            memberId
+          );
+          data = scheduleResponse?.data || [];
+          break;
+        case "medication":
+          const medicationResponse = await apiClient.getMemberMedications?.(
+            memberId
+          );
+          data = medicationResponse?.data || [];
+          break;
+        case "sleep":
+          const sleepResponse = await apiClient.getMemberSleepRecords?.(
+            memberId
+          );
+          data = sleepResponse?.data || [];
+          break;
+        case "community":
+          const communityResponse = await apiClient.getMemberCommunityPosts?.(
+            memberId
+          );
+          data = communityResponse?.data || [];
+          break;
+        case "total":
+          // 모든 활동을 합쳐서 시간순 정렬
+          const [meals, schedules, medications, sleeps, communities] =
+            await Promise.all([
+              apiClient.getMemberMeals?.(memberId).catch(() => ({ data: [] })),
+              apiClient
+                .getMemberSchedules?.(memberId)
+                .catch(() => ({ data: [] })),
+              apiClient
+                .getMemberMedications?.(memberId)
+                .catch(() => ({ data: [] })),
+              apiClient
+                .getMemberSleepRecords?.(memberId)
+                .catch(() => ({ data: [] })),
+              apiClient
+                .getMemberCommunityPosts?.(memberId)
+                .catch(() => ({ data: [] })),
+            ]);
+
+          data = [
+            ...(meals?.data || []).map((item: any) => ({
+              ...item,
+              _type: "meal",
+            })),
+            ...(schedules?.data || []).map((item: any) => ({
+              ...item,
+              _type: "schedule",
+            })),
+            ...(medications?.data || []).map((item: any) => ({
+              ...item,
+              _type: "medication",
+            })),
+            ...(sleeps?.data || []).map((item: any) => ({
+              ...item,
+              _type: "sleep",
+            })),
+            ...(communities?.data || []).map((item: any) => ({
+              ...item,
+              _type: "community",
+            })),
+          ].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          break;
+      }
+
+      setActivityRecords(data);
+    } catch (error) {
+      console.error("Failed to load activity records:", error);
+      // API가 없는 경우 샘플 데이터로 대체 (개발용)
+      setActivityRecords(getSampleRecords(type));
+    } finally {
+      setLoadingRecords(false);
+    }
+  };
+
+  // 샘플 데이터 (API 연동 전 테스트용)
+  const getSampleRecords = (type: ActivityType) => {
+    const now = new Date();
+    switch (type) {
+      case "meal":
+        return [
+          {
+            id: "1",
+            mealType: "아침",
+            description: "현미밥, 된장국, 계란프라이",
+            createdAt: now.toISOString(),
+          },
+          {
+            id: "2",
+            mealType: "점심",
+            description: "비빔밥, 미역국",
+            createdAt: new Date(now.getTime() - 86400000).toISOString(),
+          },
+        ];
+      case "schedule":
+        return [
+          {
+            id: "1",
+            title: "병원 정기 검진",
+            date: "2025-01-15",
+            time: "10:00",
+            createdAt: now.toISOString(),
+          },
+          {
+            id: "2",
+            title: "물리치료",
+            date: "2025-01-20",
+            time: "14:00",
+            createdAt: new Date(now.getTime() - 86400000).toISOString(),
+          },
+        ];
+      case "medication":
+        return [
+          {
+            id: "1",
+            medicationName: "혈압약",
+            dosage: "1정",
+            takenAt: "08:00",
+            createdAt: now.toISOString(),
+          },
+          {
+            id: "2",
+            medicationName: "비타민D",
+            dosage: "1정",
+            takenAt: "09:00",
+            createdAt: now.toISOString(),
+          },
+        ];
+      case "sleep":
+        return [
+          {
+            id: "1",
+            sleepTime: "22:30",
+            wakeTime: "06:30",
+            quality: 4,
+            note: "숙면",
+            createdAt: now.toISOString(),
+          },
+          {
+            id: "2",
+            sleepTime: "23:00",
+            wakeTime: "07:00",
+            quality: 3,
+            note: "중간에 한번 깸",
+            createdAt: new Date(now.getTime() - 86400000).toISOString(),
+          },
+        ];
+      case "community":
+        return [
+          {
+            id: "1",
+            title: "오늘 산책 다녀왔어요",
+            content: "날씨가 좋아서 공원에서 산책했습니다.",
+            likesCount: 5,
+            commentsCount: 3,
+            createdAt: now.toISOString(),
+          },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const handleActivityClick = (member: Member, type: ActivityType) => {
+    const count =
+      type === "total"
+        ? getTotalActivity(member.activity)
+        : member.activity?.[`${type}Count` as keyof MemberActivity] || 0;
+
+    if (count === 0) {
+      toast.info("아직 기록이 없습니다");
+      return;
+    }
+
+    setSelectedActivityType(type);
+    setIsActivityDetailOpen(true);
+    loadActivityRecords(member.id, type);
+  };
+
+  const getActivityTypeInfo = (type: ActivityType) => {
+    switch (type) {
+      case "meal":
+        return { icon: Utensils, label: "식사 기록", color: "orange" };
+      case "schedule":
+        return { icon: Calendar, label: "일정 등록", color: "blue" };
+      case "medication":
+        return { icon: Pill, label: "투약 기록", color: "green" };
+      case "sleep":
+        return { icon: Moon, label: "수면 기록", color: "indigo" };
+      case "community":
+        return { icon: Users, label: "커뮤니티", color: "pink" };
+      case "total":
+        return { icon: Activity, label: "전체 활동", color: "purple" };
+    }
+  };
 
   const handleInvite = async () => {
     if (!inviteEmail) return;
@@ -199,7 +519,6 @@ export function FamilyMembers() {
     }
   };
 
-  // ✨ [수정됨] 사진 업로드 핸들러
   const handlePhotoUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -221,17 +540,13 @@ export function FamilyMembers() {
       const formData = new FormData();
       formData.append("file", file);
 
-      // 1. API 호출
-      // 반환값 예시: { success: true, data: "https://..." }
       const response = await apiClient.uploadMemberPhoto(
         selectedMember.id,
         formData
       );
 
-      // 2. URL 추출 (api.ts에서 data 자체가 URL 문자열임)
       const imageUrl = response.data;
 
-      // 3. 상태 업데이트 (avatarUrl 사용)
       setSelectedMember({ ...selectedMember, avatarUrl: imageUrl });
       setMembers(
         members.map((m) =>
@@ -276,6 +591,17 @@ export function FamilyMembers() {
     });
   };
 
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("ko-KR", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const getLastActiveText = (lastActiveAt: string | null) => {
     if (!lastActiveAt) return "활동 기록 없음";
     const now = new Date();
@@ -299,6 +625,164 @@ export function FamilyMembers() {
       (activity.sleepCount || 0) +
       (activity.communityCount || 0)
     );
+  };
+
+  const getMealTypeEmoji = (mealType: string) => {
+    switch (mealType) {
+      case "아침":
+        return "🌅";
+      case "점심":
+        return "☀️";
+      case "저녁":
+        return "🌙";
+      case "간식":
+        return "🍪";
+      default:
+        return "🍽️";
+    }
+  };
+
+  const getSleepQualityText = (quality: number) => {
+    if (quality >= 4) return "😴 숙면";
+    if (quality >= 3) return "😊 보통";
+    if (quality >= 2) return "😐 나쁨";
+    return "😫 매우 나쁨";
+  };
+
+  // 활동 기록 렌더링 함수
+  const renderActivityRecord = (record: any, type: ActivityType) => {
+    const recordType = record._type || type;
+
+    switch (recordType) {
+      case "meal":
+        return (
+          <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg border border-orange-100">
+            <div className="text-2xl">{getMealTypeEmoji(record.mealType)}</div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-orange-700">
+                  {record.mealType}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {formatDateTime(record.createdAt)}
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">{record.description}</p>
+              {record.photoUrl && (
+                <div className="mt-2">
+                  <img
+                    src={record.photoUrl}
+                    alt="식사 사진"
+                    className="w-20 h-20 object-cover rounded-lg"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
+      case "schedule":
+        return (
+          <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-blue-700">
+                  {record.title}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                <Clock className="w-3 h-3" />
+                <span>
+                  {record.date} {record.time && `${record.time}`}
+                </span>
+              </div>
+              {record.description && (
+                <p className="text-sm text-gray-500 mt-1">
+                  {record.description}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+
+      case "medication":
+        return (
+          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
+            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+              <Pill className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-green-700">
+                  {record.medicationName}
+                </span>
+                <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded">
+                  {record.dosage}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
+                <Clock className="w-3 h-3" />
+                <span>복용 시간: {record.takenAt}</span>
+              </div>
+            </div>
+          </div>
+        );
+
+      case "sleep":
+        return (
+          <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+              <Moon className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-indigo-700">
+                  {record.sleepTime} ~ {record.wakeTime}
+                </span>
+                <span className="text-xs">
+                  {getSleepQualityText(record.quality)}
+                </span>
+              </div>
+              {record.note && (
+                <p className="text-sm text-gray-600 mt-1">{record.note}</p>
+              )}
+            </div>
+          </div>
+        );
+
+      case "community":
+        return (
+          <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg border border-pink-100">
+            <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
+              <MessageCircle className="w-5 h-5 text-pink-600" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-pink-700">
+                  {record.title}
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                {record.content}
+              </p>
+              <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                  <Heart className="w-3 h-3" /> {record.likesCount}
+                </span>
+                <span className="flex items-center gap-1">
+                  <MessageCircle className="w-3 h-3" /> {record.commentsCount}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
   return (
@@ -538,7 +1022,6 @@ export function FamilyMembers() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-12 h-12">
-                    {/* ✨ [수정됨] profileImage -> avatarUrl */}
                     {member.avatarUrl ? (
                       <AvatarImage src={member.avatarUrl} alt={member.name} />
                     ) : null}
@@ -588,12 +1071,11 @@ export function FamilyMembers() {
 
       {/* 구성원 상세 정보 모달 */}
       <Dialog open={isMemberDetailOpen} onOpenChange={setIsMemberDetailOpen}>
-        <DialogContent className="border-orange-100 max-w-md">
+        <DialogContent className="border-orange-100 max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <div className="relative group">
                 <Avatar className="w-14 h-14">
-                  {/* ✨ [수정됨] profileImage -> avatarUrl */}
                   {selectedMember?.avatarUrl ? (
                     <AvatarImage
                       src={selectedMember.avatarUrl}
@@ -675,55 +1157,105 @@ export function FamilyMembers() {
                 </CardContent>
               </Card>
 
-              {/* 활동 통계 */}
+              {/* 활동 통계 (클릭 가능) */}
               <Card className="border-orange-100">
                 <CardContent className="p-4 space-y-3">
                   <h4 className="font-semibold text-gray-900 flex items-center gap-2">
                     📊 활동 통계
+                    <span className="text-xs font-normal text-gray-400">
+                      클릭하여 상세 보기
+                    </span>
                   </h4>
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-orange-50 rounded-lg p-3 text-center">
-                      <Utensils className="w-5 h-5 text-orange-500 mx-auto mb-1" />
+                    {/* 식사 기록 */}
+                    <button
+                      className="bg-orange-50 rounded-lg p-3 text-center hover:bg-orange-100 transition-colors group"
+                      onClick={() =>
+                        handleActivityClick(selectedMember, "meal")
+                      }
+                    >
+                      <Utensils className="w-5 h-5 text-orange-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                       <p className="text-2xl font-bold text-orange-600">
                         {selectedMember.activity?.mealCount || 0}
                       </p>
                       <p className="text-xs text-gray-500">식사 기록</p>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                      <Calendar className="w-5 h-5 text-blue-500 mx-auto mb-1" />
+                      <ChevronRight className="w-3 h-3 text-orange-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+
+                    {/* 일정 등록 */}
+                    <button
+                      className="bg-blue-50 rounded-lg p-3 text-center hover:bg-blue-100 transition-colors group"
+                      onClick={() =>
+                        handleActivityClick(selectedMember, "schedule")
+                      }
+                    >
+                      <Calendar className="w-5 h-5 text-blue-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                       <p className="text-2xl font-bold text-blue-600">
                         {selectedMember.activity?.scheduleCount || 0}
                       </p>
                       <p className="text-xs text-gray-500">일정 등록</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                      <Pill className="w-5 h-5 text-green-500 mx-auto mb-1" />
+                      <ChevronRight className="w-3 h-3 text-blue-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+
+                    {/* 투약 기록 */}
+                    <button
+                      className="bg-green-50 rounded-lg p-3 text-center hover:bg-green-100 transition-colors group"
+                      onClick={() =>
+                        handleActivityClick(selectedMember, "medication")
+                      }
+                    >
+                      <Pill className="w-5 h-5 text-green-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                       <p className="text-2xl font-bold text-green-600">
                         {selectedMember.activity?.medicationCount || 0}
                       </p>
                       <p className="text-xs text-gray-500">투약 기록</p>
-                    </div>
-                    <div className="bg-indigo-50 rounded-lg p-3 text-center">
-                      <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
+                      <ChevronRight className="w-3 h-3 text-green-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+
+                    {/* 수면 기록 */}
+                    <button
+                      className="bg-indigo-50 rounded-lg p-3 text-center hover:bg-indigo-100 transition-colors group"
+                      onClick={() =>
+                        handleActivityClick(selectedMember, "sleep")
+                      }
+                    >
+                      <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                       <p className="text-2xl font-bold text-indigo-600">
                         {selectedMember.activity?.sleepCount || 0}
                       </p>
                       <p className="text-xs text-gray-500">수면 기록</p>
-                    </div>
-                    <div className="bg-pink-50 rounded-lg p-3 text-center">
-                      <Users className="w-5 h-5 text-pink-500 mx-auto mb-1" />
+                      <ChevronRight className="w-3 h-3 text-indigo-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+
+                    {/* 커뮤니티 */}
+                    <button
+                      className="bg-pink-50 rounded-lg p-3 text-center hover:bg-pink-100 transition-colors group"
+                      onClick={() =>
+                        handleActivityClick(selectedMember, "community")
+                      }
+                    >
+                      <Users className="w-5 h-5 text-pink-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                       <p className="text-2xl font-bold text-pink-600">
                         {selectedMember.activity?.communityCount || 0}
                       </p>
                       <p className="text-xs text-gray-500">커뮤니티</p>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-3 text-center">
-                      <Activity className="w-5 h-5 text-purple-500 mx-auto mb-1" />
+                      <ChevronRight className="w-3 h-3 text-pink-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+
+                    {/* 총 활동 */}
+                    <button
+                      className="bg-purple-50 rounded-lg p-3 text-center hover:bg-purple-100 transition-colors group"
+                      onClick={() =>
+                        handleActivityClick(selectedMember, "total")
+                      }
+                    >
+                      <Activity className="w-5 h-5 text-purple-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                       <p className="text-2xl font-bold text-purple-600">
                         {getTotalActivity(selectedMember.activity)}
                       </p>
                       <p className="text-xs text-gray-500">총 활동</p>
-                    </div>
+                      <ChevronRight className="w-3 h-3 text-purple-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
                   </div>
                 </CardContent>
               </Card>
@@ -796,6 +1328,59 @@ export function FamilyMembers() {
         </DialogContent>
       </Dialog>
 
+      {/* 활동 상세 보기 모달 */}
+      <Dialog
+        open={isActivityDetailOpen}
+        onOpenChange={setIsActivityDetailOpen}
+      >
+        <DialogContent className="border-orange-100 max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedActivityType && (
+                <>
+                  {(() => {
+                    const info = getActivityTypeInfo(selectedActivityType);
+                    const Icon = info.icon;
+                    return (
+                      <>
+                        <div
+                          className={`w-8 h-8 bg-${info.color}-100 rounded-lg flex items-center justify-center`}
+                        >
+                          <Icon className={`w-4 h-4 text-${info.color}-600`} />
+                        </div>
+                        <span>
+                          {selectedMember?.name}님의 {info.label}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-3 mt-4">
+            {loadingRecords ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-2"></div>
+                <p className="text-gray-500">기록을 불러오는 중...</p>
+              </div>
+            ) : activityRecords.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Activity className="w-12 h-12 mx-auto mb-3 text-gray-200" />
+                <p>아직 기록이 없습니다</p>
+              </div>
+            ) : (
+              activityRecords.map((record) => (
+                <div key={record.id}>
+                  {renderActivityRecord(record, selectedActivityType!)}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 삭제 확인 다이얼로그 */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="border-red-100 max-w-sm">
@@ -809,7 +1394,6 @@ export function FamilyMembers() {
           <div className="space-y-4 mt-4">
             <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg border border-red-100">
               <Avatar className="w-10 h-10">
-                {/* ✨ [수정됨] profileImage -> avatarUrl */}
                 {memberToDelete?.avatarUrl ? (
                   <AvatarImage
                     src={memberToDelete.avatarUrl}
@@ -873,68 +1457,193 @@ export function FamilyMembers() {
         </DialogContent>
       </Dialog>
 
-      {/* 전체 활동 통계 (하단) */}
+      {/* 전체 활동 통계 (하단) - 개선된 버전 */}
       {members.length > 0 && (
         <Card className="border-orange-100">
           <CardContent className="p-4">
-            <h3 className="text-gray-900 font-semibold mb-3 flex items-center gap-2">
-              📊 전체 활동 통계
-            </h3>
-            <div className="space-y-2">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center justify-between py-2 border-b border-orange-50 last:border-0 cursor-pointer hover:bg-orange-50 rounded-lg px-2 -mx-2 transition-colors"
-                  onClick={() => handleMemberClick(member)}
+            {/* 헤더 + 토글 */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-gray-900 font-semibold flex items-center gap-2">
+                📊 활동 통계
+              </h3>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    statsViewMode === "total"
+                      ? "bg-white text-orange-600 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setStatsViewMode("total")}
                 >
-                  <div className="flex items-center gap-2">
-                    <Avatar className="w-6 h-6">
-                      {/* ✨ [수정됨] profileImage -> avatarUrl */}
-                      {member.avatarUrl ? (
-                        <AvatarImage src={member.avatarUrl} alt={member.name} />
-                      ) : null}
-                      <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
-                        {member.name[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-medium">{member.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="flex items-center gap-1">
-                      <Utensils className="w-3 h-3 text-orange-400" />
-                      <span className="text-orange-600 font-medium">
-                        {member.activity?.mealCount || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-blue-400" />
-                      <span className="text-blue-600 font-medium">
-                        {member.activity?.scheduleCount || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Pill className="w-3 h-3 text-green-400" />
-                      <span className="text-green-600 font-medium">
-                        {member.activity?.medicationCount || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Moon className="w-3 h-3 text-indigo-400" />
-                      <span className="text-indigo-600 font-medium">
-                        {member.activity?.sleepCount || 0}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3 h-3 text-pink-400" />
-                      <span className="text-pink-600 font-medium">
-                        {member.activity?.communityCount || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  <BarChart3 className="w-3 h-3 inline mr-1" />
+                  전체 합산
+                </button>
+                <button
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    statsViewMode === "individual"
+                      ? "bg-white text-orange-600 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                  onClick={() => setStatsViewMode("individual")}
+                >
+                  <User className="w-3 h-3 inline mr-1" />
+                  개인별
+                </button>
+              </div>
             </div>
 
+            {/* 전체 합산 통계 */}
+            {statsViewMode === "total" && (
+              <div className="space-y-4">
+                {/* 전체 합산 숫자 카드 */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-orange-50 rounded-lg p-3 text-center">
+                    <Utensils className="w-4 h-4 text-orange-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-orange-600">
+                      {totalStats.mealCount}
+                    </p>
+                    <p className="text-xs text-gray-500">식사</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 text-center">
+                    <Calendar className="w-4 h-4 text-blue-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-blue-600">
+                      {totalStats.scheduleCount}
+                    </p>
+                    <p className="text-xs text-gray-500">일정</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <Pill className="w-4 h-4 text-green-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-green-600">
+                      {totalStats.medicationCount}
+                    </p>
+                    <p className="text-xs text-gray-500">투약</p>
+                  </div>
+                  <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                    <Moon className="w-4 h-4 text-indigo-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-indigo-600">
+                      {totalStats.sleepCount}
+                    </p>
+                    <p className="text-xs text-gray-500">수면</p>
+                  </div>
+                  <div className="bg-pink-50 rounded-lg p-3 text-center">
+                    <Users className="w-4 h-4 text-pink-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-pink-600">
+                      {totalStats.communityCount}
+                    </p>
+                    <p className="text-xs text-gray-500">커뮤니티</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-3 text-center">
+                    <Activity className="w-4 h-4 text-purple-500 mx-auto mb-1" />
+                    <p className="text-xl font-bold text-purple-600">
+                      {grandTotal}
+                    </p>
+                    <p className="text-xs text-gray-500">총 활동</p>
+                  </div>
+                </div>
+
+                {/* 구성원별 기여도 막대 */}
+                <div className="space-y-2 pt-2 border-t border-orange-100">
+                  <p className="text-xs text-gray-500 font-medium">
+                    구성원별 활동 기여도
+                  </p>
+                  {members.map((member) => {
+                    const memberTotal = getTotalActivity(member.activity);
+                    const percentage =
+                      grandTotal > 0 ? (memberTotal / grandTotal) * 100 : 0;
+                    return (
+                      <div key={member.id} className="flex items-center gap-2">
+                        <Avatar className="w-6 h-6">
+                          {member.avatarUrl ? (
+                            <AvatarImage
+                              src={member.avatarUrl}
+                              alt={member.name}
+                            />
+                          ) : null}
+                          <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
+                            {member.name[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs text-gray-600 w-16 truncate">
+                          {member.name}
+                        </span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full transition-all duration-500"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 w-12 text-right">
+                          {memberTotal}건
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 개인별 통계 */}
+            {statsViewMode === "individual" && (
+              <div className="space-y-2">
+                {members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between py-2 border-b border-orange-50 last:border-0 cursor-pointer hover:bg-orange-50 rounded-lg px-2 -mx-2 transition-colors"
+                    onClick={() => handleMemberClick(member)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Avatar className="w-6 h-6">
+                        {member.avatarUrl ? (
+                          <AvatarImage
+                            src={member.avatarUrl}
+                            alt={member.name}
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
+                          {member.name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium">{member.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="flex items-center gap-1">
+                        <Utensils className="w-3 h-3 text-orange-400" />
+                        <span className="text-orange-600 font-medium">
+                          {member.activity?.mealCount || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-blue-400" />
+                        <span className="text-blue-600 font-medium">
+                          {member.activity?.scheduleCount || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Pill className="w-3 h-3 text-green-400" />
+                        <span className="text-green-600 font-medium">
+                          {member.activity?.medicationCount || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Moon className="w-3 h-3 text-indigo-400" />
+                        <span className="text-indigo-600 font-medium">
+                          {member.activity?.sleepCount || 0}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3 text-pink-400" />
+                        <span className="text-pink-600 font-medium">
+                          {member.activity?.communityCount || 0}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 범례 */}
             <div className="flex flex-wrap items-center justify-center gap-3 mt-4 pt-3 border-t border-orange-100">
               <div className="flex items-center gap-1 text-xs text-gray-500">
                 <Utensils className="w-3 h-3 text-orange-400" />

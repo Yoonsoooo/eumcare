@@ -46,7 +46,6 @@ export class APIClient {
     await supabase.from("profiles").upsert(updates);
   }
 
-  // [유지] 가입일(joinedDate) 포함 반환
   async getMyProfile() {
     const {
       data: { user },
@@ -64,13 +63,12 @@ export class APIClient {
     return {
       data: {
         ...profile,
-        joinedDate: user.created_at, // 가입일 추가
+        joinedDate: user.created_at,
         avatarUrl: profile.avatar_url || user.user_metadata?.avatar_url || null,
       },
     };
   }
 
-  // 호환성 유지용
   async getProfile() {
     return this.getMyProfile();
   }
@@ -115,14 +113,12 @@ export class APIClient {
   }
 
   // ==========================================
-  // 2. Photo Upload (사진 업로드 - 강력한 디버깅 추가)
+  // 2. Photo Upload (사진 업로드)
   // ==========================================
 
-  // 공통 파일 추출 헬퍼 함수
   private getFileFromFormData(formData: FormData): File {
     let file = formData.get("file") as File;
 
-    // 키 값이 'file'이 아닐 경우 전체 탐색하여 파일 찾기
     if (!file) {
       for (const value of formData.values()) {
         if (value instanceof File) {
@@ -141,7 +137,6 @@ export class APIClient {
     return file;
   }
 
-  // [수정] 가족 구성원 사진 업로드
   async uploadMemberPhoto(memberId: string, formData: FormData) {
     console.log(`📸 [Upload Start] Member ID: ${memberId}`);
 
@@ -149,19 +144,16 @@ export class APIClient {
       const file = this.getFileFromFormData(formData);
       console.log(`📁 File found: ${file.name} (${file.size} bytes)`);
 
-      // 파일명 생성 (특수문자 제거 및 타임스탬프)
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `${memberId}/${fileName}`;
 
-      // Public URL 생성
       const {
         data: { publicUrl },
       } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
       console.log("🔗 Generated Public URL:", publicUrl);
 
-      // DB 업데이트
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl, updated_at: new Date() })
@@ -179,7 +171,6 @@ export class APIClient {
     }
   }
 
-  // [수정] 내 프로필 사진 업로드
   async uploadMyProfilePhoto(formData: FormData) {
     console.log("📸 [MyProfile Upload Start]");
 
@@ -195,7 +186,6 @@ export class APIClient {
       const fileExt = file.name.split(".").pop();
       const filePath = `user-${user.id}-${Date.now()}.${fileExt}`;
 
-      // 기존 사진 삭제 시도 (실패해도 진행)
       try {
         const { data: currentProfile } = await supabase
           .from("profiles")
@@ -204,7 +194,6 @@ export class APIClient {
           .single();
 
         if (currentProfile?.avatar_url) {
-          // URL에서 파일명만 추출하는 로직
           const urlParts = currentProfile.avatar_url.split("/avatars/");
           if (urlParts.length > 1) {
             const oldFileName = urlParts[1];
@@ -215,7 +204,6 @@ export class APIClient {
         console.warn("⚠️ 기존 이미지 삭제 중 오류 (무시 가능):", e);
       }
 
-      // 새 파일 업로드
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(filePath, file, {
@@ -252,7 +240,6 @@ export class APIClient {
     }
   }
 
-  // [유지] 내 프로필 사진 삭제
   async deleteProfilePhoto() {
     const {
       data: { user },
@@ -294,14 +281,12 @@ export class APIClient {
 
     const myEmail = user.email;
 
-    // 1. 연결된 초대장 찾기
     const { data: myConnections } = await supabase
       .from("invitations")
       .select("*")
       .or(`sender_email.eq.${myEmail},receiver_email.eq.${myEmail}`)
       .eq("status", "accepted");
 
-    // 2. 방장(Root) 찾기
     let rootEmail = myEmail;
     const receivedInvite = myConnections?.find(
       (inv) => inv.receiver_email === myEmail
@@ -310,14 +295,12 @@ export class APIClient {
       rootEmail = receivedInvite.sender_email;
     }
 
-    // 3. 방장 기준 모든 초대장 가져오기
     const { data: familyInvites } = await supabase
       .from("invitations")
       .select("sender_email, receiver_email")
       .eq("sender_email", rootEmail)
       .eq("status", "accepted");
 
-    // 4. 이메일 수집
     const familyEmails = new Set<string>();
     familyEmails.add(rootEmail);
     familyEmails.add(myEmail);
@@ -328,13 +311,11 @@ export class APIClient {
 
     const uniqueEmails = Array.from(familyEmails);
 
-    // 5. 프로필 조회
     const { data: profiles } = await supabase
       .from("profiles")
       .select("*")
       .in("email", uniqueEmails);
 
-    // 6. 데이터 가공
     const membersWithActivity = await Promise.all(
       uniqueEmails.map(async (email) => {
         const profile = profiles?.find((p) => p.email === email);
@@ -365,6 +346,31 @@ export class APIClient {
   }
 
   async removeFamilyMember(memberId: string) {
+    // 멤버 ID로 이메일 조회
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", memberId)
+      .single();
+
+    if (!profile?.email) {
+      throw new Error("해당 구성원을 찾을 수 없습니다.");
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user?.email) throw new Error("로그인이 필요합니다.");
+
+    // 해당 멤버와 관련된 초대장 삭제 또는 상태 변경
+    const { error } = await supabase
+      .from("invitations")
+      .delete()
+      .or(
+        `and(sender_email.eq.${user.email},receiver_email.eq.${profile.email}),and(sender_email.eq.${profile.email},receiver_email.eq.${user.email})`
+      );
+
+    if (error) throw error;
     return { success: true };
   }
 
@@ -398,13 +404,22 @@ export class APIClient {
         .select("*", { count: "exact", head: true })
         .eq("author_email", email);
 
+      // 마지막 활동 시간 조회
+      const { data: lastActivity } = await supabase
+        .from("diary_entries")
+        .select("created_at")
+        .eq("author_email", email)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
       return {
         mealCount: mealCount || 0,
         scheduleCount: scheduleCount || 0,
         medicationCount: (medicineDiaryCount || 0) + (medTableCount || 0),
         sleepCount: sleepCount || 0,
         communityCount: communityCount || 0,
-        lastActiveAt: new Date().toISOString(),
+        lastActiveAt: lastActivity?.created_at || null,
       };
     } catch {
       return {
@@ -415,6 +430,279 @@ export class APIClient {
         communityCount: 0,
         lastActiveAt: null,
       };
+    }
+  }
+
+  // ==========================================
+  // 3-1. Member Activity Details (구성원 활동 상세 조회) ✨ NEW
+  // ==========================================
+
+  // 멤버 ID로 이메일 조회하는 헬퍼 함수
+  private async getMemberEmailById(memberId: string): Promise<string | null> {
+    // memberId가 이메일 형식인지 확인
+    if (memberId.includes("@")) {
+      return memberId;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", memberId)
+      .single();
+
+    return profile?.email || null;
+  }
+
+  // 식사 기록 조회
+  async getMemberMeals(memberId: string) {
+    try {
+      const email = await this.getMemberEmailById(memberId);
+      if (!email) return { data: [] };
+
+      const { data, error } = await supabase
+        .from("diary_entries")
+        .select("*")
+        .eq("author_email", email)
+        .eq("type", "meal")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      // 프론트엔드 인터페이스에 맞게 데이터 변환
+      const formattedData = (data || []).map((entry) => ({
+        id: entry.id,
+        mealType: entry.title || "식사", // title을 mealType으로 사용
+        description: entry.content || "",
+        photoUrl: entry.image_url || null,
+        createdAt: entry.created_at,
+      }));
+
+      return { data: formattedData };
+    } catch (error) {
+      console.error("getMemberMeals error:", error);
+      return { data: [] };
+    }
+  }
+
+  // 일정 조회
+  async getMemberSchedules(memberId: string) {
+    try {
+      const email = await this.getMemberEmailById(memberId);
+      if (!email) return { data: [] };
+
+      const { data, error } = await supabase
+        .from("schedules")
+        .select("*")
+        .eq("author_email", email)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const formattedData = (data || []).map((schedule) => ({
+        id: schedule.id,
+        title: schedule.title || "일정",
+        date: schedule.date || "",
+        time: schedule.time || null,
+        description: schedule.description || schedule.content || null,
+        isCompleted: schedule.is_completed || false,
+        createdAt: schedule.created_at,
+      }));
+
+      return { data: formattedData };
+    } catch (error) {
+      console.error("getMemberSchedules error:", error);
+      return { data: [] };
+    }
+  }
+
+  // 투약 기록 조회
+  async getMemberMedications(memberId: string) {
+    try {
+      const email = await this.getMemberEmailById(memberId);
+      if (!email) return { data: [] };
+
+      // diary_entries에서 medicine 타입 조회
+      const { data: diaryMeds, error: diaryError } = await supabase
+        .from("diary_entries")
+        .select("*")
+        .eq("author_email", email)
+        .eq("type", "medicine")
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      // medications 테이블에서도 조회
+      const { data: tableMeds, error: tableError } = await supabase
+        .from("medications")
+        .select("*")
+        .eq("author_email", email)
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      if (diaryError) console.error("diaryMeds error:", diaryError);
+      if (tableError) console.error("tableMeds error:", tableError);
+
+      // 두 소스의 데이터를 합치고 포맷팅
+      const formattedDiaryMeds = (diaryMeds || []).map((entry) => ({
+        id: entry.id,
+        medicationName: entry.title || "약",
+        dosage: entry.content || "",
+        takenAt: new Date(entry.created_at).toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        isCompleted: entry.is_completed || false,
+        createdAt: entry.created_at,
+        source: "diary",
+      }));
+
+      const formattedTableMeds = (tableMeds || []).map((med) => ({
+        id: med.id,
+        medicationName: med.name || med.medication_name || "약",
+        dosage: med.dosage || "",
+        takenAt: med.time || med.taken_at || "",
+        isCompleted: med.is_taken || false,
+        createdAt: med.created_at,
+        source: "table",
+      }));
+
+      // 합치고 시간순 정렬
+      const allMeds = [...formattedDiaryMeds, ...formattedTableMeds].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      return { data: allMeds };
+    } catch (error) {
+      console.error("getMemberMedications error:", error);
+      return { data: [] };
+    }
+  }
+
+  // 수면 기록 조회
+  async getMemberSleepRecords(memberId: string) {
+    try {
+      const email = await this.getMemberEmailById(memberId);
+      if (!email) return { data: [] };
+
+      const { data, error } = await supabase
+        .from("diary_entries")
+        .select("*")
+        .eq("author_email", email)
+        .eq("type", "sleep")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const formattedData = (data || []).map((entry) => {
+        // content에서 수면 시간 정보 파싱 시도
+        let sleepTime = "";
+        let wakeTime = "";
+        let quality = 3;
+        let note = entry.content || "";
+
+        // content 형식 예: "취침: 22:00, 기상: 07:00, 질: 4" 또는 자유 형식
+        if (entry.content) {
+          const sleepMatch = entry.content.match(/취침[:\s]*(\d{1,2}:\d{2})/);
+          const wakeMatch = entry.content.match(/기상[:\s]*(\d{1,2}:\d{2})/);
+          const qualityMatch = entry.content.match(/[질수면][:\s]*(\d)/);
+
+          if (sleepMatch) sleepTime = sleepMatch[1];
+          if (wakeMatch) wakeTime = wakeMatch[1];
+          if (qualityMatch) quality = parseInt(qualityMatch[1]);
+        }
+
+        return {
+          id: entry.id,
+          sleepTime: sleepTime || entry.title || "",
+          wakeTime: wakeTime || "",
+          quality: quality,
+          note: note,
+          createdAt: entry.created_at,
+        };
+      });
+
+      return { data: formattedData };
+    } catch (error) {
+      console.error("getMemberSleepRecords error:", error);
+      return { data: [] };
+    }
+  }
+
+  // 커뮤니티 게시글 조회
+  async getMemberCommunityPosts(memberId: string) {
+    try {
+      const email = await this.getMemberEmailById(memberId);
+      if (!email) return { data: [] };
+
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("author_email", email)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const formattedData = (data || []).map((post) => ({
+        id: post.id,
+        title: post.title || "게시글",
+        content: post.content || "",
+        category: post.category || "일반",
+        likesCount: post.likes_count || post.likes || 0,
+        commentsCount: post.comments_count || post.comments || 0,
+        createdAt: post.created_at,
+      }));
+
+      return { data: formattedData };
+    } catch (error) {
+      console.error("getMemberCommunityPosts error:", error);
+      return { data: [] };
+    }
+  }
+
+  // 모든 활동 통합 조회 (총 활동)
+  async getMemberAllActivities(memberId: string) {
+    try {
+      const [meals, schedules, medications, sleeps, communities] =
+        await Promise.all([
+          this.getMemberMeals(memberId),
+          this.getMemberSchedules(memberId),
+          this.getMemberMedications(memberId),
+          this.getMemberSleepRecords(memberId),
+          this.getMemberCommunityPosts(memberId),
+        ]);
+
+      // 모든 활동에 타입 추가하고 합치기
+      const allActivities = [
+        ...(meals.data || []).map((item) => ({ ...item, _type: "meal" })),
+        ...(schedules.data || []).map((item) => ({
+          ...item,
+          _type: "schedule",
+        })),
+        ...(medications.data || []).map((item) => ({
+          ...item,
+          _type: "medication",
+        })),
+        ...(sleeps.data || []).map((item) => ({ ...item, _type: "sleep" })),
+        ...(communities.data || []).map((item) => ({
+          ...item,
+          _type: "community",
+        })),
+      ];
+
+      // 시간순 정렬 (최신순)
+      allActivities.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      return { data: allActivities };
+    } catch (error) {
+      console.error("getMemberAllActivities error:", error);
+      return { data: [] };
     }
   }
 
@@ -461,17 +749,14 @@ export class APIClient {
 
     const myEmail = user.email;
 
-    // 1. 나와 연결된 초대장 확인 (내가 방장인지, 멤버인지 확인)
     const { data: myConnections } = await supabase
       .from("invitations")
       .select("*")
       .or(`sender_email.eq.${myEmail},receiver_email.eq.${myEmail}`)
       .eq("status", "accepted");
 
-    // 2. '방장(Root)' 이메일 찾기
     let rootEmail = myEmail;
 
-    // 내가 받은 초대장이 있다면, 보낸 사람이 방장입니다.
     const receivedInvite = myConnections?.find(
       (inv) => inv.receiver_email === myEmail
     );
@@ -479,15 +764,12 @@ export class APIClient {
       rootEmail = receivedInvite.sender_email;
     }
 
-    // 3. 방장이 초대한 **모든** 사람들(형제/자매 포함) 찾기
     const { data: familyInvites } = await supabase
       .from("invitations")
       .select("receiver_email")
       .eq("sender_email", rootEmail)
       .eq("status", "accepted");
 
-    // 4. 이메일 리스트 합치기 (중복 제거)
-    // 구성: [나, 방장, 방장이 초대한 다른 사람들]
     const familyEmails = new Set<string>();
     familyEmails.add(myEmail);
     familyEmails.add(rootEmail);
