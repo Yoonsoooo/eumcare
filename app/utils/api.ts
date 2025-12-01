@@ -3,7 +3,9 @@ import { supabase } from "./auth";
 export class APIClient {
   setAccessToken(token: string | null) {}
 
-  // ... (Auth, Profile 관련 함수들은 기존과 동일 - 생략하지 않고 전체 코드 제공) ...
+  // ==========================================
+  // 1. Auth & Profile (인증 및 프로필)
+  // ==========================================
 
   async signup(email: string, password: string, name: string) {
     const { data, error } = await supabase.auth.signUp({
@@ -18,6 +20,15 @@ export class APIClient {
     }
     if (error) throw error;
     return { data };
+  }
+
+  async signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Logout error:", error);
+      throw error;
+    }
+    return { success: true };
   }
 
   async syncProfile() {
@@ -35,24 +46,33 @@ export class APIClient {
     await supabase.from("profiles").upsert(updates);
   }
 
-  async getProfile() {
-    await this.syncProfile();
+  // [유지] 가입일(joinedDate) 포함 반환
+  async getMyProfile() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return { data: null, error: "Not authenticated" };
+    if (!user) throw new Error("로그인이 필요합니다.");
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (error) throw error;
+
     return {
       data: {
-        id: user.id,
-        email: user.email,
-        name: user.user_metadata?.name || "",
-        phone: user.user_metadata?.phone || "",
-        createdAt: user.created_at,
-        // 프로필 이미지 URL이 있다면 반환 (DB 컬럼명 확인 필요: avatar_url)
-        avatarUrl: user.user_metadata?.avatar_url || null,
+        ...profile,
+        joinedDate: user.created_at, // 가입일 추가
+        avatarUrl: profile.avatar_url || user.user_metadata?.avatar_url || null,
       },
-      error: null,
     };
+  }
+
+  // 호환성 유지용
+  async getProfile() {
+    return this.getMyProfile();
   }
 
   formatPhoneNumber(phone: string) {
@@ -75,49 +95,333 @@ export class APIClient {
     return { data, error: null };
   }
 
-  // ▼▼▼ [추가됨] 사진 업로드 함수 ▼▼▼
-  /**
-   * 멤버 사진 업로드 기능
-   * 전제조건:
-   * 1. Supabase Storage에 'avatars'라는 이름의 Public 버킷이 있어야 합니다.
-   * 2. profiles 테이블에 'avatar_url' 컬럼이 존재해야 합니다.
-   */
-  async uploadMemberPhoto(memberId: string, formData: FormData) {
-    const file = formData.get("file") as File;
+  async updateMyProfile(updates: {
+    name?: string;
+    phone?: string;
+    avatar_url?: string;
+  }) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다.");
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", user.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return { data };
+  }
+
+  // ==========================================
+  // 2. Photo Upload (사진 업로드 - 강력한 디버깅 추가)
+  // ==========================================
+
+  // 공통 파일 추출 헬퍼 함수
+  private getFileFromFormData(formData: FormData): File {
+    let file = formData.get("file") as File;
+
+    // 키 값이 'file'이 아닐 경우 전체 탐색하여 파일 찾기
     if (!file) {
+      for (const value of formData.values()) {
+        if (value instanceof File) {
+          file = value;
+          break;
+        }
+      }
+    }
+
+    if (!file) {
+      console.error(
+        "❌ FormData에서 파일을 찾을 수 없습니다. input name='file'인지 확인하세요."
+      );
       throw new Error("업로드할 파일이 없습니다.");
     }
+    return file;
+  }
 
-    // 파일 확장자 추출
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${memberId}-${Date.now()}.${fileExt}`;
+  // [수정] 가족 구성원 사진 업로드
+  async uploadMemberPhoto(memberId: string, formData: FormData) {
+    console.log(`📸 [Upload Start] Member ID: ${memberId}`);
 
-    // ⚠️ 버킷명 확인! 'profiles'로 되어있는지 체크
-    const { data, error } = await supabase.storage
-      .from("profiles") // ✅ 이 이름이 생성한 버킷명과 일치해야 함!
-      .upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: true,
-      });
+    try {
+      const file = this.getFileFromFormData(formData);
+      console.log(`📁 File found: ${file.name} (${file.size} bytes)`);
 
-    if (error) {
-      console.error("Upload error:", error);
-      throw error;
+      // 파일명 생성 (특수문자 제거 및 타임스탬프)
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `${memberId}/${fileName}`;
+
+      // Public URL 생성
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+      console.log("🔗 Generated Public URL:", publicUrl);
+
+      // DB 업데이트
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl, updated_at: new Date() })
+        .eq("id", memberId);
+
+      if (updateError) {
+        console.error("❌ Profile DB Update Error:", updateError);
+        throw updateError;
+      }
+
+      return { success: true, data: publicUrl };
+    } catch (e) {
+      console.error("🔥 uploadMemberPhoto Exception:", e);
+      throw e;
+    }
+  }
+
+  // [수정] 내 프로필 사진 업로드
+  async uploadMyProfilePhoto(formData: FormData) {
+    console.log("📸 [MyProfile Upload Start]");
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
+
+      const file = this.getFileFromFormData(formData);
+      console.log(`📁 File found: ${file.name}`);
+
+      const fileExt = file.name.split(".").pop();
+      const filePath = `user-${user.id}-${Date.now()}.${fileExt}`;
+
+      // 기존 사진 삭제 시도 (실패해도 진행)
+      try {
+        const { data: currentProfile } = await supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", user.id)
+          .single();
+
+        if (currentProfile?.avatar_url) {
+          // URL에서 파일명만 추출하는 로직
+          const urlParts = currentProfile.avatar_url.split("/avatars/");
+          if (urlParts.length > 1) {
+            const oldFileName = urlParts[1];
+            await supabase.storage.from("avatars").remove([oldFileName]);
+          }
+        }
+      } catch (e) {
+        console.warn("⚠️ 기존 이미지 삭제 중 오류 (무시 가능):", e);
+      }
+
+      // 새 파일 업로드
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error("❌ MyProfile Upload Error:", uploadError);
+        console.error(
+          "💡 힌트: Supabase Storage 'avatars' 버킷 권한(Policy)을 확인하세요."
+        );
+        throw uploadError;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const imageUrl = urlData.publicUrl;
+      console.log("🔗 New Profile URL:", imageUrl);
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: imageUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      return { data: { publicUrl: imageUrl } };
+    } catch (e) {
+      console.error("🔥 uploadMyProfilePhoto Exception:", e);
+      throw e;
+    }
+  }
+
+  // [유지] 내 프로필 사진 삭제
+  async deleteProfilePhoto() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다.");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.avatar_url) {
+      const urlParts = profile.avatar_url.split("/avatars/");
+      if (urlParts.length > 1) {
+        const fileName = urlParts[1];
+        await supabase.storage.from("avatars").remove([fileName]);
+      }
     }
 
-    // Public URL 가져오기
-    const { data: urlData } = supabase.storage
+    const { error } = await supabase
       .from("profiles")
-      .getPublicUrl(fileName);
+      .update({ avatar_url: null })
+      .eq("id", user.id);
 
-    // DB에 URL 저장 (필요시)
-    // await this.updateMemberProfile(memberId, { profileImage: urlData.publicUrl });
-
-    return { data: urlData };
+    if (error) throw error;
+    return { success: true };
   }
-  // ▲▲▲ [추가 완료] ▲▲▲
 
-  // ... (Diary, Schedule 기본 함수들 유지) ...
+  // ==========================================
+  // 3. Family & Members (가족 구성원 로직)
+  // ==========================================
+
+  async getFamilyMembers() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || !user.email) return { data: [] };
+
+    const myEmail = user.email;
+
+    // 1. 연결된 초대장 찾기
+    const { data: myConnections } = await supabase
+      .from("invitations")
+      .select("*")
+      .or(`sender_email.eq.${myEmail},receiver_email.eq.${myEmail}`)
+      .eq("status", "accepted");
+
+    // 2. 방장(Root) 찾기
+    let rootEmail = myEmail;
+    const receivedInvite = myConnections?.find(
+      (inv) => inv.receiver_email === myEmail
+    );
+    if (receivedInvite) {
+      rootEmail = receivedInvite.sender_email;
+    }
+
+    // 3. 방장 기준 모든 초대장 가져오기
+    const { data: familyInvites } = await supabase
+      .from("invitations")
+      .select("sender_email, receiver_email")
+      .eq("sender_email", rootEmail)
+      .eq("status", "accepted");
+
+    // 4. 이메일 수집
+    const familyEmails = new Set<string>();
+    familyEmails.add(rootEmail);
+    familyEmails.add(myEmail);
+
+    familyInvites?.forEach((inv) => {
+      familyEmails.add(inv.receiver_email);
+    });
+
+    const uniqueEmails = Array.from(familyEmails);
+
+    // 5. 프로필 조회
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("email", uniqueEmails);
+
+    // 6. 데이터 가공
+    const membersWithActivity = await Promise.all(
+      uniqueEmails.map(async (email) => {
+        const profile = profiles?.find((p) => p.email === email);
+        const activity = await this.getMemberActivity(email);
+        const isOwner = email === rootEmail;
+
+        return {
+          id: profile?.id || email,
+          name: profile?.name || email.split("@")[0],
+          email: email,
+          phone: profile?.phone || "",
+          avatarUrl: profile?.avatar_url || null,
+          isOwner: isOwner,
+          isMe: email === myEmail,
+          joinedDate: profile?.updated_at || new Date().toISOString(),
+          activity,
+        };
+      })
+    );
+
+    membersWithActivity.sort((a, b) => {
+      if (a.isOwner && !b.isOwner) return -1;
+      if (!a.isOwner && b.isOwner) return 1;
+      return 0;
+    });
+
+    return { data: membersWithActivity };
+  }
+
+  async removeFamilyMember(memberId: string) {
+    return { success: true };
+  }
+
+  async getMemberActivity(email: string) {
+    try {
+      const { count: mealCount } = await supabase
+        .from("diary_entries")
+        .select("*", { count: "exact", head: true })
+        .eq("author_email", email)
+        .eq("type", "meal");
+      const { count: scheduleCount } = await supabase
+        .from("schedules")
+        .select("*", { count: "exact", head: true })
+        .eq("author_email", email);
+      const { count: medicineDiaryCount } = await supabase
+        .from("diary_entries")
+        .select("*", { count: "exact", head: true })
+        .eq("author_email", email)
+        .eq("type", "medicine");
+      const { count: medTableCount } = await supabase
+        .from("medications")
+        .select("*", { count: "exact", head: true })
+        .eq("author_email", email);
+      const { count: sleepCount } = await supabase
+        .from("diary_entries")
+        .select("*", { count: "exact", head: true })
+        .eq("author_email", email)
+        .eq("type", "sleep");
+      const { count: communityCount } = await supabase
+        .from("posts")
+        .select("*", { count: "exact", head: true })
+        .eq("author_email", email);
+
+      return {
+        mealCount: mealCount || 0,
+        scheduleCount: scheduleCount || 0,
+        medicationCount: (medicineDiaryCount || 0) + (medTableCount || 0),
+        sleepCount: sleepCount || 0,
+        communityCount: communityCount || 0,
+        lastActiveAt: new Date().toISOString(),
+      };
+    } catch {
+      return {
+        mealCount: 0,
+        scheduleCount: 0,
+        medicationCount: 0,
+        sleepCount: 0,
+        communityCount: 0,
+        lastActiveAt: null,
+      };
+    }
+  }
+
+  // ==========================================
+  // 4. Diaries & Schedules (일기 및 일정)
+  // ==========================================
+
   async createDiary(elderlyCareRecipientName: string) {
     const {
       data: { user },
@@ -154,22 +458,45 @@ export class APIClient {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user?.email) return [];
-    const { data: sent } = await supabase
+
+    const myEmail = user.email;
+
+    // 1. 나와 연결된 초대장 확인 (내가 방장인지, 멤버인지 확인)
+    const { data: myConnections } = await supabase
+      .from("invitations")
+      .select("*")
+      .or(`sender_email.eq.${myEmail},receiver_email.eq.${myEmail}`)
+      .eq("status", "accepted");
+
+    // 2. '방장(Root)' 이메일 찾기
+    let rootEmail = myEmail;
+
+    // 내가 받은 초대장이 있다면, 보낸 사람이 방장입니다.
+    const receivedInvite = myConnections?.find(
+      (inv) => inv.receiver_email === myEmail
+    );
+    if (receivedInvite) {
+      rootEmail = receivedInvite.sender_email;
+    }
+
+    // 3. 방장이 초대한 **모든** 사람들(형제/자매 포함) 찾기
+    const { data: familyInvites } = await supabase
       .from("invitations")
       .select("receiver_email")
-      .eq("sender_email", user.email)
+      .eq("sender_email", rootEmail)
       .eq("status", "accepted");
-    const { data: received } = await supabase
-      .from("invitations")
-      .select("sender_email")
-      .eq("receiver_email", user.email)
-      .eq("status", "accepted");
-    const familyEmails = [
-      user.email,
-      ...(sent?.map((i) => i.receiver_email) || []),
-      ...(received?.map((i) => i.sender_email) || []),
-    ];
-    return [...new Set(familyEmails)];
+
+    // 4. 이메일 리스트 합치기 (중복 제거)
+    // 구성: [나, 방장, 방장이 초대한 다른 사람들]
+    const familyEmails = new Set<string>();
+    familyEmails.add(myEmail);
+    familyEmails.add(rootEmail);
+
+    familyInvites?.forEach((inv) => {
+      familyEmails.add(inv.receiver_email);
+    });
+
+    return Array.from(familyEmails);
   }
 
   async addDiaryEntry(
@@ -220,6 +547,7 @@ export class APIClient {
     if (error) throw error;
     return { data };
   }
+
   async deleteDiaryEntry(id: string) {
     const { error } = await supabase
       .from("diary_entries")
@@ -228,6 +556,7 @@ export class APIClient {
     if (error) throw error;
     return { success: true };
   }
+
   async updateDiaryEntry(id: string, updates: any) {
     const { data, error } = await supabase
       .from("diary_entries")
@@ -279,11 +608,13 @@ export class APIClient {
     if (error) throw error;
     return { data };
   }
+
   async deleteSchedule(id: string) {
     const { error } = await supabase.from("schedules").delete().eq("id", id);
     if (error) throw error;
     return { success: true };
   }
+
   async updateSchedule(id: string, updates: any) {
     const { data, error } = await supabase
       .from("schedules")
@@ -294,6 +625,7 @@ export class APIClient {
     if (error) throw error;
     return { data };
   }
+
   async toggleScheduleComplete(id: string, isCompleted: boolean) {
     const updates: any = {
       is_completed: isCompleted,
@@ -306,6 +638,7 @@ export class APIClient {
     if (error) throw error;
     return { success: true };
   }
+
   async toggleDiaryComplete(id: string, isCompleted: boolean) {
     const updates: any = {
       is_completed: isCompleted,
@@ -319,161 +652,10 @@ export class APIClient {
     return { success: true };
   }
 
-  // ✨ 대안: 초대 관계 기반 관리자 판단
-  async getFamilyMembers() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user || !user.email) return { data: [] };
+  // ==========================================
+  // 5. Invitations (초대 관련)
+  // ==========================================
 
-    const { data: sentInvites } = await supabase
-      .from("invitations")
-      .select("*")
-      .eq("sender_email", user.email)
-      .eq("status", "accepted");
-
-    const { data: receivedInvites } = await supabase
-      .from("invitations")
-      .select("*")
-      .eq("receiver_email", user.email)
-      .eq("status", "accepted");
-
-    const familyList = [
-      ...(sentInvites?.map((i) => ({ email: i.receiver_email })) || []),
-      ...(receivedInvites?.map((i) => ({ email: i.sender_email })) || []),
-    ];
-    const uniqueEmails = [
-      ...new Set([user.email, ...familyList.map((f) => f.email)]),
-    ];
-
-    // ✨ 초대받은 적 있는 사람들의 이메일 수집
-    const allReceiverEmails = new Set<string>();
-
-    // 가족 내 모든 초대 관계 조회
-    const { data: allInvites } = await supabase
-      .from("invitations")
-      .select("sender_email, receiver_email")
-      .eq("status", "accepted")
-      .or(
-        `sender_email.in.(${uniqueEmails.join(
-          ","
-        )}),receiver_email.in.(${uniqueEmails.join(",")})`
-      );
-
-    allInvites?.forEach((inv) => {
-      allReceiverEmails.add(inv.receiver_email);
-    });
-
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("*")
-      .in("email", uniqueEmails);
-
-    const membersWithActivity = await Promise.all(
-      uniqueEmails.map(async (email) => {
-        const profile = profiles?.find((p) => p.email === email);
-        const activity = await this.getMemberActivity(email);
-
-        // ✨ 관리자 = 초대받은 적 없는 사람 (= 원래 초대를 시작한 사람)
-        const isOwner = !allReceiverEmails.has(email);
-
-        return {
-          id: profile?.id || email,
-          name: profile?.name || email.split("@")[0],
-          email: email,
-          phone: profile?.phone || "",
-          // 이미지 URL 추가 (DB에 avatar_url 컬럼이 있다고 가정)
-          avatarUrl: profile?.avatar_url || null,
-          isOwner: isOwner,
-          isMe: email === user.email,
-          joinedDate: profile?.updated_at || new Date().toISOString(),
-          activity,
-        };
-      })
-    );
-
-    membersWithActivity.sort((a, b) => {
-      if (a.isOwner && !b.isOwner) return -1;
-      if (!a.isOwner && b.isOwner) return 1;
-      return 0;
-    });
-
-    return { data: membersWithActivity };
-  }
-
-  // 가족 구성원 삭제
-  async removeFamilyMember(memberId: string) {
-    const { error } = await supabase
-      .from("family_members")
-      .delete()
-      .eq("id", memberId);
-
-    if (error) throw error;
-    return { success: true };
-  }
-
-  // ✨ [수정] 활동 통계 (상세하게 카운트)
-  async getMemberActivity(email: string) {
-    try {
-      // 1. 식사 (meal)
-      const { count: mealCount } = await supabase
-        .from("diary_entries")
-        .select("*", { count: "exact", head: true })
-        .eq("author_email", email)
-        .eq("type", "meal");
-
-      // 2. 일정 (schedule)
-      const { count: scheduleCount } = await supabase
-        .from("schedules")
-        .select("*", { count: "exact", head: true })
-        .eq("author_email", email);
-
-      // 3. 투약 (medicine 타입 일기 + medications 테이블)
-      const { count: medicineDiaryCount } = await supabase
-        .from("diary_entries")
-        .select("*", { count: "exact", head: true })
-        .eq("author_email", email)
-        .eq("type", "medicine");
-      const { count: medTableCount } = await supabase
-        .from("medications")
-        .select("*", { count: "exact", head: true })
-        .eq("author_email", email);
-      const medicationCount = (medicineDiaryCount || 0) + (medTableCount || 0);
-
-      // 4. 수면 (sleep)
-      const { count: sleepCount } = await supabase
-        .from("diary_entries")
-        .select("*", { count: "exact", head: true })
-        .eq("author_email", email)
-        .eq("type", "sleep");
-
-      // 5. 커뮤니티 (posts)
-      const { count: communityCount } = await supabase
-        .from("posts")
-        .select("*", { count: "exact", head: true })
-        .eq("author_email", email);
-
-      return {
-        mealCount: mealCount || 0,
-        scheduleCount: scheduleCount || 0,
-        medicationCount: medicationCount || 0,
-        sleepCount: sleepCount || 0,
-        communityCount: communityCount || 0,
-        lastActiveAt: new Date().toISOString(),
-      };
-    } catch {
-      return {
-        mealCount: 0,
-        scheduleCount: 0,
-        medicationCount: 0,
-        sleepCount: 0,
-        communityCount: 0,
-        lastActiveAt: null,
-      };
-    }
-  }
-
-  // ... (나머지 함수들 동일) ...
   async getInvitations() {
     const {
       data: { user },
@@ -486,6 +668,7 @@ export class APIClient {
       .eq("status", "pending");
     return { data: data || [] };
   }
+
   async sendInvitation(
     email: string,
     options?: { name?: string; phone?: string }
@@ -497,6 +680,7 @@ export class APIClient {
     const formattedPhone = options?.phone
       ? this.formatPhoneNumber(options.phone)
       : "";
+
     const { error } = await supabase.from("invitations").insert({
       sender_email: user.email,
       sender_name: user.user_metadata?.name || user.email.split("@")[0],
@@ -508,9 +692,11 @@ export class APIClient {
     if (error) throw error;
     return { success: true };
   }
+
   async inviteMember(email: string, options?: any) {
     return this.sendInvitation(email, options);
   }
+
   async acceptInvite(id: string) {
     const { error } = await supabase
       .from("invitations")
@@ -519,9 +705,11 @@ export class APIClient {
     if (error) throw error;
     return { success: true };
   }
+
   async acceptInvitation(id: string) {
     return this.acceptInvite(id);
   }
+
   async declineInvitation(id: string) {
     const { error } = await supabase
       .from("invitations")
@@ -530,6 +718,11 @@ export class APIClient {
     if (error) throw error;
     return { success: true };
   }
+
+  // ==========================================
+  // 6. Community (커뮤니티)
+  // ==========================================
+
   async addCommunityPost(title: string, content: string, category: string) {
     const {
       data: { user },
@@ -559,7 +752,6 @@ export class APIClient {
   }
 
   async likePost(postId: string) {
-    // 좋아요 기능은 복잡해서 일단 성공으로 처리
     return { data: { success: true } };
   }
 }

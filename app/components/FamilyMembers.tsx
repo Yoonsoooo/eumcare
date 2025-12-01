@@ -9,19 +9,14 @@ import {
   Bell,
   Phone,
   Calendar,
-  FileText,
   Activity,
-  X,
-  Heart,
   Pill,
-  MessageSquare,
   Moon,
   Utensils,
   Users,
   Camera,
-  Upload,
-  Trash2, // ✨ 추가
-  AlertTriangle, // ✨ 추가
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -52,7 +47,7 @@ interface Member {
   name: string;
   email: string;
   phone?: string;
-  profileImage?: string;
+  avatarUrl?: string; // ✨ [수정] profileImage -> avatarUrl (API와 통일)
   isOwner: boolean;
   joinedDate: string;
   activity?: MemberActivity;
@@ -88,7 +83,7 @@ export function FamilyMembers() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // ✨ 삭제 관련 상태 추가
+  // 삭제 관련 상태
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -101,6 +96,7 @@ export function FamilyMembers() {
   async function loadMembers() {
     try {
       const { data } = await apiClient.getFamilyMembers();
+      // API에서 받아온 데이터가 Member 인터페이스와 맞는지(avatarUrl 등) 확인
       setMembers(data || []);
     } catch (error) {
       console.error("Failed to load family members:", error);
@@ -178,29 +174,22 @@ export function FamilyMembers() {
     setIsMemberDetailOpen(true);
   };
 
-  // ✨ 삭제 다이얼로그 열기
   const handleOpenDeleteDialog = (member: Member) => {
     setMemberToDelete(member);
     setIsDeleteDialogOpen(true);
   };
 
-  // ✨ 구성원 삭제 핸들러
   const handleDeleteMember = async () => {
     if (!memberToDelete) return;
 
     setIsDeleting(true);
     try {
       await apiClient.removeFamilyMember(memberToDelete.id);
-
-      // 로컬 상태에서 제거
       setMembers(members.filter((m) => m.id !== memberToDelete.id));
-
-      // 다이얼로그 닫기
       setIsDeleteDialogOpen(false);
       setIsMemberDetailOpen(false);
       setMemberToDelete(null);
       setSelectedMember(null);
-
       toast.success(`${memberToDelete.name}님을 구성원에서 삭제했습니다`);
     } catch (error: any) {
       console.error("Failed to delete member:", error);
@@ -210,8 +199,7 @@ export function FamilyMembers() {
     }
   };
 
-  // FamilyMembers.tsx - handlePhotoUpload 함수 수정
-
+  // ✨ [수정됨] 사진 업로드 핸들러
   const handlePhotoUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -231,23 +219,25 @@ export function FamilyMembers() {
     setUploadingPhoto(true);
     try {
       const formData = new FormData();
-      formData.append("file", file); // ✅ "photo" → "file"로 변경!
-      formData.append("memberId", selectedMember.id);
+      formData.append("file", file);
 
-      await apiClient.uploadMemberPhoto(selectedMember.id, formData);
+      // 1. API 호출
+      // 반환값 예시: { success: true, data: "https://..." }
+      const response = await apiClient.uploadMemberPhoto(
+        selectedMember.id,
+        formData
+      );
 
-      // 로컬 미리보기 업데이트
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        setSelectedMember({ ...selectedMember, profileImage: imageUrl });
-        setMembers(
-          members.map((m) =>
-            m.id === selectedMember.id ? { ...m, profileImage: imageUrl } : m
-          )
-        );
-      };
-      reader.readAsDataURL(file);
+      // 2. URL 추출 (api.ts에서 data 자체가 URL 문자열임)
+      const imageUrl = response.data;
+
+      // 3. 상태 업데이트 (avatarUrl 사용)
+      setSelectedMember({ ...selectedMember, avatarUrl: imageUrl });
+      setMembers(
+        members.map((m) =>
+          m.id === selectedMember.id ? { ...m, avatarUrl: imageUrl } : m
+        )
+      );
 
       toast.success("프로필 사진이 업데이트되었습니다!");
     } catch (error) {
@@ -255,6 +245,9 @@ export function FamilyMembers() {
       toast.error("사진 업로드에 실패했습니다");
     } finally {
       setUploadingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -310,7 +303,7 @@ export function FamilyMembers() {
 
   return (
     <div className="space-y-4 pb-20 md:pb-6">
-      {/* ... 상단 부분은 동일 ... */}
+      {/* 상단 헤더 및 초대 버튼들 */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">가족 구성원</h2>
         <div className="flex items-center gap-2">
@@ -433,7 +426,6 @@ export function FamilyMembers() {
                     상대방이 이음케어에 가입되어 있어야 초대할 수 있습니다.
                   </p>
                 </div>
-
                 <div className="space-y-2">
                   <Label className="text-gray-700">이름</Label>
                   <Input
@@ -444,7 +436,6 @@ export function FamilyMembers() {
                     className="border-orange-200 focus:border-orange-400 focus:ring-orange-200"
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label className="text-gray-700">전화번호</Label>
                   <div className="relative">
@@ -458,7 +449,6 @@ export function FamilyMembers() {
                     />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label className="text-gray-700">
                     이메일 주소 <span className="text-red-500">*</span>
@@ -474,7 +464,6 @@ export function FamilyMembers() {
                     />
                   </div>
                 </div>
-
                 <Button
                   className="w-full bg-orange-500 hover:bg-orange-600"
                   onClick={handleInvite}
@@ -491,7 +480,6 @@ export function FamilyMembers() {
                     </>
                   )}
                 </Button>
-
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <span className="w-full border-t border-orange-200" />
@@ -500,7 +488,6 @@ export function FamilyMembers() {
                     <span className="bg-white px-2 text-gray-500">또는</span>
                   </div>
                 </div>
-
                 <Button
                   variant="outline"
                   className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
@@ -551,11 +538,9 @@ export function FamilyMembers() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-12 h-12">
-                    {member.profileImage ? (
-                      <AvatarImage
-                        src={member.profileImage}
-                        alt={member.name}
-                      />
+                    {/* ✨ [수정됨] profileImage -> avatarUrl */}
+                    {member.avatarUrl ? (
+                      <AvatarImage src={member.avatarUrl} alt={member.name} />
                     ) : null}
                     <AvatarFallback className="bg-orange-100 text-orange-600 font-medium">
                       {member.name[0]}
@@ -601,16 +586,17 @@ export function FamilyMembers() {
         )}
       </div>
 
-      {/* ✨ 구성원 상세 정보 모달 - 삭제 버튼 추가 */}
+      {/* 구성원 상세 정보 모달 */}
       <Dialog open={isMemberDetailOpen} onOpenChange={setIsMemberDetailOpen}>
         <DialogContent className="border-orange-100 max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               <div className="relative group">
                 <Avatar className="w-14 h-14">
-                  {selectedMember?.profileImage ? (
+                  {/* ✨ [수정됨] profileImage -> avatarUrl */}
+                  {selectedMember?.avatarUrl ? (
                     <AvatarImage
-                      src={selectedMember.profileImage}
+                      src={selectedMember.avatarUrl}
                       alt={selectedMember.name}
                     />
                   ) : null}
@@ -794,7 +780,7 @@ export function FamilyMembers() {
                 </Button>
               </div>
 
-              {/* ✨ 구성원 삭제 버튼 - 본인(관리자)은 삭제 불가 */}
+              {/* 구성원 삭제 버튼 */}
               {!selectedMember.isOwner && (
                 <Button
                   variant="outline"
@@ -810,7 +796,7 @@ export function FamilyMembers() {
         </DialogContent>
       </Dialog>
 
-      {/* ✨ 삭제 확인 다이얼로그 */}
+      {/* 삭제 확인 다이얼로그 */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="border-red-100 max-w-sm">
           <DialogHeader>
@@ -821,12 +807,12 @@ export function FamilyMembers() {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
-            {/* 삭제 대상 정보 */}
             <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg border border-red-100">
               <Avatar className="w-10 h-10">
-                {memberToDelete?.profileImage ? (
+                {/* ✨ [수정됨] profileImage -> avatarUrl */}
+                {memberToDelete?.avatarUrl ? (
                   <AvatarImage
-                    src={memberToDelete.profileImage}
+                    src={memberToDelete.avatarUrl}
                     alt={memberToDelete.name}
                   />
                 ) : null}
@@ -842,7 +828,6 @@ export function FamilyMembers() {
               </div>
             </div>
 
-            {/* 경고 메시지 */}
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
               <p className="text-sm text-yellow-800">
                 ⚠️ <strong>{memberToDelete?.name}</strong>님을 가족 구성원에서
@@ -854,7 +839,6 @@ export function FamilyMembers() {
               </ul>
             </div>
 
-            {/* 액션 버튼 */}
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -889,7 +873,7 @@ export function FamilyMembers() {
         </DialogContent>
       </Dialog>
 
-      {/* 전체 활동 통계 */}
+      {/* 전체 활동 통계 (하단) */}
       {members.length > 0 && (
         <Card className="border-orange-100">
           <CardContent className="p-4">
@@ -905,11 +889,9 @@ export function FamilyMembers() {
                 >
                   <div className="flex items-center gap-2">
                     <Avatar className="w-6 h-6">
-                      {member.profileImage ? (
-                        <AvatarImage
-                          src={member.profileImage}
-                          alt={member.name}
-                        />
+                      {/* ✨ [수정됨] profileImage -> avatarUrl */}
+                      {member.avatarUrl ? (
+                        <AvatarImage src={member.avatarUrl} alt={member.name} />
                       ) : null}
                       <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
                         {member.name[0]}
