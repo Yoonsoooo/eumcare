@@ -72,7 +72,6 @@ interface Invitation {
   created_at?: string;
 }
 
-// 활동 기록 인터페이스들
 interface MealRecord {
   id: string;
   mealType: string;
@@ -116,6 +115,10 @@ interface CommunityRecord {
   createdAt: string;
 }
 
+interface FamilyMembersProps {
+  fontScale?: number;
+}
+
 type ActivityType =
   | "meal"
   | "schedule"
@@ -124,7 +127,7 @@ type ActivityType =
   | "community"
   | "total";
 
-export function FamilyMembers() {
+export function FamilyMembers({ fontScale = 1 }: FamilyMembersProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,30 +138,32 @@ export function FamilyMembers() {
   const [inviteName, setInviteName] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
 
-  // 구성원 상세 정보 모달
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [isMemberDetailOpen, setIsMemberDetailOpen] = useState(false);
 
-  // 프로필 사진 업로드
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // 삭제 관련 상태
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 활동 상세 보기 관련 상태
   const [isActivityDetailOpen, setIsActivityDetailOpen] = useState(false);
   const [selectedActivityType, setSelectedActivityType] =
     useState<ActivityType | null>(null);
   const [activityRecords, setActivityRecords] = useState<any[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
 
-  // 전체 통계 보기 모드 (individual: 개인별, total: 전체 합산)
   const [statsViewMode, setStatsViewMode] = useState<"individual" | "total">(
     "total"
   );
+
+  // 스케일 헬퍼 함수들
+  const getIconSize = (base: number) => base * fontScale;
+  const getPadding = (base: number) => `${base * fontScale}rem`;
+  const getFontSize = (base: number) => `${base * fontScale}rem`;
+  const getGap = (base: number) => `${base * fontScale}rem`;
+  const getSize = (base: number) => `${base * fontScale}rem`;
 
   useEffect(() => {
     loadMembers();
@@ -185,7 +190,6 @@ export function FamilyMembers() {
     }
   }
 
-  // 전체 합산 통계 계산
   const getTotalStats = () => {
     return members.reduce(
       (acc, member) => {
@@ -218,7 +222,6 @@ export function FamilyMembers() {
     totalStats.sleepCount +
     totalStats.communityCount;
 
-  // 활동 상세 기록 불러오기
   const loadActivityRecords = async (memberId: string, type: ActivityType) => {
     setLoadingRecords(true);
     setActivityRecords([]);
@@ -228,7 +231,6 @@ export function FamilyMembers() {
 
       switch (type) {
         case "meal":
-          // API 호출 - 실제 API에 맞게 수정 필요
           const mealResponse = await apiClient.getMemberMeals?.(memberId);
           data = mealResponse?.data || [];
           break;
@@ -257,7 +259,6 @@ export function FamilyMembers() {
           data = communityResponse?.data || [];
           break;
         case "total":
-          // 모든 활동을 합쳐서 시간순 정렬
           const [meals, schedules, medications, sleeps, communities] =
             await Promise.all([
               apiClient.getMemberMeals?.(memberId).catch(() => ({ data: [] })),
@@ -306,14 +307,12 @@ export function FamilyMembers() {
       setActivityRecords(data);
     } catch (error) {
       console.error("Failed to load activity records:", error);
-      // API가 없는 경우 샘플 데이터로 대체 (개발용)
       setActivityRecords(getSampleRecords(type));
     } finally {
       setLoadingRecords(false);
     }
   };
 
-  // 샘플 데이터 (API 연동 전 테스트용)
   const getSampleRecords = (type: ActivityType) => {
     const now = new Date();
     switch (type) {
@@ -649,31 +648,53 @@ export function FamilyMembers() {
     return "😫 매우 나쁨";
   };
 
-  // 활동 기록 렌더링 함수
   const renderActivityRecord = (record: any, type: ActivityType) => {
     const recordType = record._type || type;
 
     switch (recordType) {
       case "meal":
         return (
-          <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg border border-orange-100">
-            <div className="text-2xl">{getMealTypeEmoji(record.mealType)}</div>
+          <div
+            className="flex items-start bg-orange-50 rounded-lg border border-orange-100"
+            style={{ gap: getGap(0.75), padding: getPadding(0.75) }}
+          >
+            <div style={{ fontSize: getFontSize(1.5) }}>
+              {getMealTypeEmoji(record.mealType)}
+            </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-orange-700">
+              <div className="flex items-center" style={{ gap: getGap(0.5) }}>
+                <span
+                  className="font-medium text-orange-700"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {record.mealType}
                 </span>
-                <span className="text-xs text-gray-400">
+                <span
+                  className="text-gray-400"
+                  style={{ fontSize: getFontSize(0.75) }}
+                >
                   {formatDateTime(record.createdAt)}
                 </span>
               </div>
-              <p className="text-sm text-gray-600 mt-1">{record.description}</p>
+              <p
+                className="text-gray-600"
+                style={{
+                  fontSize: getFontSize(0.875),
+                  marginTop: getGap(0.25),
+                }}
+              >
+                {record.description}
+              </p>
               {record.photoUrl && (
-                <div className="mt-2">
+                <div style={{ marginTop: getGap(0.5) }}>
                   <img
                     src={record.photoUrl}
                     alt="식사 사진"
-                    className="w-20 h-20 object-cover rounded-lg"
+                    className="object-cover rounded-lg"
+                    style={{
+                      width: getSize(5),
+                      height: getSize(5),
+                    }}
                   />
                 </div>
               )}
@@ -683,24 +704,60 @@ export function FamilyMembers() {
 
       case "schedule":
         return (
-          <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-blue-600" />
+          <div
+            className="flex items-start bg-blue-50 rounded-lg border border-blue-100"
+            style={{ gap: getGap(0.75), padding: getPadding(0.75) }}
+          >
+            <div
+              className="bg-blue-100 rounded-lg flex items-center justify-center"
+              style={{
+                width: getSize(2.5),
+                height: getSize(2.5),
+              }}
+            >
+              <Calendar
+                className="text-blue-600"
+                style={{
+                  width: getIconSize(20),
+                  height: getIconSize(20),
+                }}
+              />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-blue-700">
+              <div className="flex items-center" style={{ gap: getGap(0.5) }}>
+                <span
+                  className="font-medium text-blue-700"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {record.title}
                 </span>
               </div>
-              <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
-                <Clock className="w-3 h-3" />
+              <div
+                className="flex items-center text-gray-600"
+                style={{
+                  gap: getGap(0.5),
+                  marginTop: getGap(0.25),
+                  fontSize: getFontSize(0.875),
+                }}
+              >
+                <Clock
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>
                   {record.date} {record.time && `${record.time}`}
                 </span>
               </div>
               {record.description && (
-                <p className="text-sm text-gray-500 mt-1">
+                <p
+                  className="text-gray-500"
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    marginTop: getGap(0.25),
+                  }}
+                >
                   {record.description}
                 </p>
               )}
@@ -710,21 +767,57 @@ export function FamilyMembers() {
 
       case "medication":
         return (
-          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <Pill className="w-5 h-5 text-green-600" />
+          <div
+            className="flex items-start bg-green-50 rounded-lg border border-green-100"
+            style={{ gap: getGap(0.75), padding: getPadding(0.75) }}
+          >
+            <div
+              className="bg-green-100 rounded-lg flex items-center justify-center"
+              style={{
+                width: getSize(2.5),
+                height: getSize(2.5),
+              }}
+            >
+              <Pill
+                className="text-green-600"
+                style={{
+                  width: getIconSize(20),
+                  height: getIconSize(20),
+                }}
+              />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-green-700">
+              <div className="flex items-center" style={{ gap: getGap(0.5) }}>
+                <span
+                  className="font-medium text-green-700"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {record.medicationName}
                 </span>
-                <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded">
+                <span
+                  className="bg-green-200 text-green-800 rounded"
+                  style={{
+                    fontSize: getFontSize(0.75),
+                    padding: `${0.125 * fontScale}rem ${0.5 * fontScale}rem`,
+                  }}
+                >
                   {record.dosage}
                 </span>
               </div>
-              <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
-                <Clock className="w-3 h-3" />
+              <div
+                className="flex items-center text-gray-600"
+                style={{
+                  gap: getGap(0.5),
+                  marginTop: getGap(0.25),
+                  fontSize: getFontSize(0.875),
+                }}
+              >
+                <Clock
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>복용 시간: {record.takenAt}</span>
               </div>
             </div>
@@ -733,21 +826,47 @@ export function FamilyMembers() {
 
       case "sleep":
         return (
-          <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-              <Moon className="w-5 h-5 text-indigo-600" />
+          <div
+            className="flex items-start bg-indigo-50 rounded-lg border border-indigo-100"
+            style={{ gap: getGap(0.75), padding: getPadding(0.75) }}
+          >
+            <div
+              className="bg-indigo-100 rounded-lg flex items-center justify-center"
+              style={{
+                width: getSize(2.5),
+                height: getSize(2.5),
+              }}
+            >
+              <Moon
+                className="text-indigo-600"
+                style={{
+                  width: getIconSize(20),
+                  height: getIconSize(20),
+                }}
+              />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-indigo-700">
+              <div className="flex items-center" style={{ gap: getGap(0.5) }}>
+                <span
+                  className="font-medium text-indigo-700"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {record.sleepTime} ~ {record.wakeTime}
                 </span>
-                <span className="text-xs">
+                <span style={{ fontSize: getFontSize(0.75) }}>
                   {getSleepQualityText(record.quality)}
                 </span>
               </div>
               {record.note && (
-                <p className="text-sm text-gray-600 mt-1">{record.note}</p>
+                <p
+                  className="text-gray-600"
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    marginTop: getGap(0.25),
+                  }}
+                >
+                  {record.note}
+                </p>
               )}
             </div>
           </div>
@@ -755,25 +874,74 @@ export function FamilyMembers() {
 
       case "community":
         return (
-          <div className="flex items-start gap-3 p-3 bg-pink-50 rounded-lg border border-pink-100">
-            <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-              <MessageCircle className="w-5 h-5 text-pink-600" />
+          <div
+            className="flex items-start bg-pink-50 rounded-lg border border-pink-100"
+            style={{ gap: getGap(0.75), padding: getPadding(0.75) }}
+          >
+            <div
+              className="bg-pink-100 rounded-lg flex items-center justify-center"
+              style={{
+                width: getSize(2.5),
+                height: getSize(2.5),
+              }}
+            >
+              <MessageCircle
+                className="text-pink-600"
+                style={{
+                  width: getIconSize(20),
+                  height: getIconSize(20),
+                }}
+              />
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-pink-700">
+              <div className="flex items-center" style={{ gap: getGap(0.5) }}>
+                <span
+                  className="font-medium text-pink-700"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {record.title}
                 </span>
               </div>
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+              <p
+                className="text-gray-600 line-clamp-2"
+                style={{
+                  fontSize: getFontSize(0.875),
+                  marginTop: getGap(0.25),
+                }}
+              >
                 {record.content}
               </p>
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Heart className="w-3 h-3" /> {record.likesCount}
+              <div
+                className="flex items-center text-gray-500"
+                style={{
+                  gap: getGap(0.75),
+                  marginTop: getGap(0.5),
+                  fontSize: getFontSize(0.75),
+                }}
+              >
+                <span
+                  className="flex items-center"
+                  style={{ gap: getGap(0.25) }}
+                >
+                  <Heart
+                    style={{
+                      width: getIconSize(12),
+                      height: getIconSize(12),
+                    }}
+                  />{" "}
+                  {record.likesCount}
                 </span>
-                <span className="flex items-center gap-1">
-                  <MessageCircle className="w-3 h-3" /> {record.commentsCount}
+                <span
+                  className="flex items-center"
+                  style={{ gap: getGap(0.25) }}
+                >
+                  <MessageCircle
+                    style={{
+                      width: getIconSize(12),
+                      height: getIconSize(12),
+                    }}
+                  />{" "}
+                  {record.commentsCount}
                 </span>
               </div>
             </div>
@@ -786,11 +954,16 @@ export function FamilyMembers() {
   };
 
   return (
-    <div className="space-y-4 pb-20 md:pb-6">
+    <div
+      className="pb-20 md:pb-6"
+      style={{ display: "flex", flexDirection: "column", gap: getGap(1) }}
+    >
       {/* 상단 헤더 및 초대 버튼들 */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">가족 구성원</h2>
-        <div className="flex items-center gap-2">
+        <h2 className="font-bold" style={{ fontSize: getFontSize(1.25) }}>
+          가족 구성원
+        </h2>
+        <div className="flex items-center" style={{ gap: getGap(0.5) }}>
           {/* 받은 초대 버튼 */}
           <Dialog
             open={isInvitationsDialogOpen}
@@ -800,11 +973,28 @@ export function FamilyMembers() {
               <Button
                 variant="outline"
                 className="relative border-orange-200 text-orange-600 hover:bg-orange-50"
+                style={{
+                  fontSize: getFontSize(0.875),
+                  padding: `${0.5 * fontScale}rem ${1 * fontScale}rem`,
+                }}
               >
-                <Bell className="w-4 h-4 mr-2" />
+                <Bell
+                  style={{
+                    width: getIconSize(16),
+                    height: getIconSize(16),
+                    marginRight: 8 * fontScale,
+                  }}
+                />
                 받은 초대
                 {pendingInvitations.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  <span
+                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full flex items-center justify-center"
+                    style={{
+                      width: getSize(1.25),
+                      height: getSize(1.25),
+                      fontSize: getFontSize(0.75),
+                    }}
+                  >
                     {pendingInvitations.length}
                   </span>
                 )}
@@ -812,28 +1002,60 @@ export function FamilyMembers() {
             </DialogTrigger>
             <DialogContent className="border-orange-100">
               <DialogHeader>
-                <DialogTitle>📬 받은 초대</DialogTitle>
+                <DialogTitle style={{ fontSize: getFontSize(1.125) }}>
+                  📬 받은 초대
+                </DialogTitle>
               </DialogHeader>
-              <div className="space-y-3 mt-4">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: getGap(0.75),
+                  marginTop: getGap(1),
+                }}
+              >
                 {pendingInvitations.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Bell className="w-12 h-12 mx-auto mb-3 text-orange-200" />
-                    <p>받은 초대가 없습니다</p>
+                  <div
+                    className="text-center text-gray-500"
+                    style={{ padding: getPadding(2) }}
+                  >
+                    <Bell
+                      className="mx-auto text-orange-200"
+                      style={{
+                        width: getIconSize(48),
+                        height: getIconSize(48),
+                        marginBottom: getGap(0.75),
+                      }}
+                    />
+                    <p style={{ fontSize: getFontSize(0.875) }}>
+                      받은 초대가 없습니다
+                    </p>
                   </div>
                 ) : (
                   pendingInvitations.map((invitation) => (
                     <Card key={invitation.id} className="border-orange-100">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarFallback className="bg-orange-100 text-orange-600">
+                      <CardContent style={{ padding: getPadding(1) }}>
+                        <div
+                          className="flex items-start"
+                          style={{ gap: getGap(0.75) }}
+                        >
+                          <Avatar
+                            style={{
+                              width: getSize(2.5),
+                              height: getSize(2.5),
+                            }}
+                          >
+                            <AvatarFallback
+                              className="bg-orange-100 text-orange-600"
+                              style={{ fontSize: getFontSize(0.875) }}
+                            >
                               {(invitation.sender_email ||
                                 invitation.fromUserName ||
                                 "?")[0].toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <p className="text-sm">
+                            <p style={{ fontSize: getFontSize(0.875) }}>
                               <span className="font-medium text-gray-900">
                                 {invitation.sender_email || "알 수 없음"}
                               </span>
@@ -846,7 +1068,13 @@ export function FamilyMembers() {
                                 다이어리에 초대했습니다.
                               </span>
                             </p>
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p
+                              className="text-gray-400"
+                              style={{
+                                fontSize: getFontSize(0.75),
+                                marginTop: getGap(0.25),
+                              }}
+                            >
                               {Math.floor(
                                 (new Date().getTime() -
                                   new Date(
@@ -857,13 +1085,25 @@ export function FamilyMembers() {
                               )}
                               일 전
                             </p>
-                            <div className="flex gap-2 mt-3">
+                            <div
+                              className="flex"
+                              style={{
+                                gap: getGap(0.5),
+                                marginTop: getGap(0.75),
+                              }}
+                            >
                               <Button
                                 size="sm"
                                 className="bg-orange-500 hover:bg-orange-600"
                                 onClick={() =>
                                   handleAcceptInvitation(invitation.id)
                                 }
+                                style={{
+                                  fontSize: getFontSize(0.875),
+                                  padding: `${0.375 * fontScale}rem ${
+                                    0.75 * fontScale
+                                  }rem`,
+                                }}
                               >
                                 수락
                               </Button>
@@ -874,6 +1114,12 @@ export function FamilyMembers() {
                                 onClick={() =>
                                   handleDeclineInvitation(invitation.id)
                                 }
+                                style={{
+                                  fontSize: getFontSize(0.875),
+                                  padding: `${0.375 * fontScale}rem ${
+                                    0.75 * fontScale
+                                  }rem`,
+                                }}
                               >
                                 거절
                               </Button>
@@ -894,57 +1140,136 @@ export function FamilyMembers() {
             onOpenChange={setIsInviteDialogOpen}
           >
             <DialogTrigger asChild>
-              <Button className="bg-orange-500 hover:bg-orange-600">
-                <UserPlus className="w-4 h-4 mr-2" />
+              <Button
+                className="bg-orange-500 hover:bg-orange-600"
+                style={{
+                  fontSize: getFontSize(0.875),
+                  padding: `${0.5 * fontScale}rem ${1 * fontScale}rem`,
+                }}
+              >
+                <UserPlus
+                  style={{
+                    width: getIconSize(16),
+                    height: getIconSize(16),
+                    marginRight: 8 * fontScale,
+                  }}
+                />
                 초대하기
               </Button>
             </DialogTrigger>
             <DialogContent className="border-orange-100">
               <DialogHeader>
-                <DialogTitle>👨‍👩‍👧‍👦 가족 구성원 초대</DialogTitle>
+                <DialogTitle style={{ fontSize: getFontSize(1.125) }}>
+                  👨‍👩‍👧‍👦 가족 구성원 초대
+                </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 mt-4">
-                <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
-                  <p className="text-sm text-orange-800">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: getGap(1),
+                  marginTop: getGap(1),
+                }}
+              >
+                <div
+                  className="bg-orange-50 border border-orange-100 rounded-lg"
+                  style={{ padding: getPadding(0.75) }}
+                >
+                  <p
+                    className="text-orange-800"
+                    style={{ fontSize: getFontSize(0.875) }}
+                  >
                     💡 초대할 가족의 정보를 입력하세요. 이메일은 필수이며,
                     상대방이 이음케어에 가입되어 있어야 초대할 수 있습니다.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-700">이름</Label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.5),
+                  }}
+                >
+                  <Label
+                    className="text-gray-700"
+                    style={{ fontSize: getFontSize(0.875) }}
+                  >
+                    이름
+                  </Label>
                   <Input
                     type="text"
                     placeholder="홍길동"
                     value={inviteName}
                     onChange={(e) => setInviteName(e.target.value)}
                     className="border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                    style={{ fontSize: getFontSize(0.875) }}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-700">전화번호</Label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.5),
+                  }}
+                >
+                  <Label
+                    className="text-gray-700"
+                    style={{ fontSize: getFontSize(0.875) }}
+                  >
+                    전화번호
+                  </Label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                    <Phone
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                      }}
+                    />
                     <Input
                       type="tel"
                       placeholder="010-1234-5678"
                       value={invitePhone}
                       onChange={(e) => setInvitePhone(e.target.value)}
-                      className="pl-10 border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                      className="border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                      style={{
+                        fontSize: getFontSize(0.875),
+                        paddingLeft: `${2.5 * fontScale}rem`,
+                      }}
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-700">
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.5),
+                  }}
+                >
+                  <Label
+                    className="text-gray-700"
+                    style={{ fontSize: getFontSize(0.875) }}
+                  >
                     이메일 주소 <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400" />
+                    <Mail
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-400"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                      }}
+                    />
                     <Input
                       type="email"
                       placeholder="example@email.com"
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
-                      className="pl-10 border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                      className="border-orange-200 focus:border-orange-400 focus:ring-orange-200"
+                      style={{
+                        fontSize: getFontSize(0.875),
+                        paddingLeft: `${2.5 * fontScale}rem`,
+                      }}
                     />
                   </div>
                 </div>
@@ -952,14 +1277,27 @@ export function FamilyMembers() {
                   className="w-full bg-orange-500 hover:bg-orange-600"
                   onClick={handleInvite}
                   disabled={searchLoading || !inviteEmail}
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    padding: `${0.625 * fontScale}rem`,
+                  }}
                 >
                   {searchLoading ? (
-                    <span className="flex items-center gap-2">
+                    <span
+                      className="flex items-center"
+                      style={{ gap: getGap(0.5) }}
+                    >
                       <span className="animate-spin">⏳</span> 초대 보내는 중...
                     </span>
                   ) : (
                     <>
-                      <UserPlus className="w-4 h-4 mr-2" />
+                      <UserPlus
+                        style={{
+                          width: getIconSize(16),
+                          height: getIconSize(16),
+                          marginRight: 8 * fontScale,
+                        }}
+                      />
                       초대 보내기
                     </>
                   )}
@@ -969,15 +1307,33 @@ export function FamilyMembers() {
                     <span className="w-full border-t border-orange-200" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-2 text-gray-500">또는</span>
+                    <span
+                      className="bg-white text-gray-500"
+                      style={{
+                        fontSize: getFontSize(0.75),
+                        padding: `0 ${0.5 * fontScale}rem`,
+                      }}
+                    >
+                      또는
+                    </span>
                   </div>
                 </div>
                 <Button
                   variant="outline"
                   className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
                   onClick={handleCopyInviteLink}
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    padding: `${0.625 * fontScale}rem`,
+                  }}
                 >
-                  <Share2 className="w-4 h-4 mr-2" />
+                  <Share2
+                    style={{
+                      width: getIconSize(16),
+                      height: getIconSize(16),
+                      marginRight: 8 * fontScale,
+                    }}
+                  />
                   초대 링크 복사
                 </Button>
               </div>
@@ -988,8 +1344,11 @@ export function FamilyMembers() {
 
       {/* Info Card */}
       <Card className="bg-orange-50 border-orange-100">
-        <CardContent className="p-4">
-          <p className="text-sm text-orange-800">
+        <CardContent style={{ padding: getPadding(1) }}>
+          <p
+            className="text-orange-800"
+            style={{ fontSize: getFontSize(0.875) }}
+          >
             🧡 가족 구성원들과 함께 일정과 기록을 공유하세요. 초대를 보내면
             상대방의 <strong>'받은 초대'</strong>에서 확인할 수 있습니다.
           </p>
@@ -997,15 +1356,35 @@ export function FamilyMembers() {
       </Card>
 
       {/* Members List */}
-      <div className="space-y-3">
+      <div
+        style={{ display: "flex", flexDirection: "column", gap: getGap(0.75) }}
+      >
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-2"></div>
-            <p className="text-gray-500">로딩 중...</p>
+          <div className="text-center" style={{ padding: getPadding(2) }}>
+            <div
+              className="animate-spin rounded-full border-b-2 border-orange-500 mx-auto"
+              style={{
+                width: getSize(2),
+                height: getSize(2),
+                marginBottom: getGap(0.5),
+              }}
+            ></div>
+            <p
+              className="text-gray-500"
+              style={{ fontSize: getFontSize(0.875) }}
+            >
+              로딩 중...
+            </p>
           </div>
         ) : members.length === 0 ? (
           <Card className="border-orange-100">
-            <CardContent className="p-8 text-center text-gray-500">
+            <CardContent
+              className="text-center text-gray-500"
+              style={{
+                padding: getPadding(2),
+                fontSize: getFontSize(1),
+              }}
+            >
               아직 가족 구성원이 없습니다.
               <br />
               <span className="text-orange-500">초대하기</span> 버튼을 눌러
@@ -1019,34 +1398,81 @@ export function FamilyMembers() {
               className="border-orange-100 hover:border-orange-200 hover:shadow-md transition-all cursor-pointer"
               onClick={() => handleMemberClick(member)}
             >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4">
-                  <Avatar className="w-12 h-12">
+              <CardContent style={{ padding: getPadding(1) }}>
+                <div className="flex items-center" style={{ gap: getGap(1) }}>
+                  <Avatar
+                    style={{
+                      width: getSize(3),
+                      height: getSize(3),
+                    }}
+                  >
                     {member.avatarUrl ? (
                       <AvatarImage src={member.avatarUrl} alt={member.name} />
                     ) : null}
-                    <AvatarFallback className="bg-orange-100 text-orange-600 font-medium">
+                    <AvatarFallback
+                      className="bg-orange-100 text-orange-600 font-medium"
+                      style={{ fontSize: getFontSize(1) }}
+                    >
                       {member.name[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-gray-900 font-semibold text-base">
+                    <div
+                      className="flex items-center"
+                      style={{ gap: getGap(0.5) }}
+                    >
+                      <h3
+                        className="text-gray-900 font-semibold"
+                        style={{ fontSize: getFontSize(1) }}
+                      >
                         {member.name}
                       </h3>
                       {member.isOwner && (
-                        <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded font-medium">
+                        <span
+                          className="bg-orange-100 text-orange-700 rounded font-medium"
+                          style={{
+                            fontSize: getFontSize(0.75),
+                            padding: `${0.125 * fontScale}rem ${
+                              0.5 * fontScale
+                            }rem`,
+                          }}
+                        >
                           관리자
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-col gap-1 mt-1.5 text-sm text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-orange-400" />
+                    <div
+                      className="flex flex-col text-gray-500"
+                      style={{
+                        gap: getGap(0.25),
+                        marginTop: getGap(0.375),
+                        fontSize: getFontSize(0.875),
+                      }}
+                    >
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Phone
+                          className="text-orange-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span>{formatPhoneNumber(member.phone || "")}</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Mail className="w-3 h-3 text-orange-400" />
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Mail
+                          className="text-orange-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span>{member.email}</span>
                       </div>
                     </div>
@@ -1059,8 +1485,17 @@ export function FamilyMembers() {
                       e.stopPropagation();
                       handleMemberClick(member);
                     }}
+                    style={{
+                      width: getSize(2.5),
+                      height: getSize(2.5),
+                    }}
                   >
-                    <MoreVertical className="w-4 h-4" />
+                    <MoreVertical
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                      }}
+                    />
                   </Button>
                 </div>
               </CardContent>
@@ -1073,16 +1508,27 @@ export function FamilyMembers() {
       <Dialog open={isMemberDetailOpen} onOpenChange={setIsMemberDetailOpen}>
         <DialogContent className="border-orange-100 max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
+            <DialogTitle
+              className="flex items-center"
+              style={{ gap: getGap(0.75) }}
+            >
               <div className="relative group">
-                <Avatar className="w-14 h-14">
+                <Avatar
+                  style={{
+                    width: getSize(3.5),
+                    height: getSize(3.5),
+                  }}
+                >
                   {selectedMember?.avatarUrl ? (
                     <AvatarImage
                       src={selectedMember.avatarUrl}
                       alt={selectedMember.name}
                     />
                   ) : null}
-                  <AvatarFallback className="bg-orange-100 text-orange-600 font-medium text-lg">
+                  <AvatarFallback
+                    className="bg-orange-100 text-orange-600 font-medium"
+                    style={{ fontSize: getFontSize(1.125) }}
+                  >
                     {selectedMember?.name[0]}
                   </AvatarFallback>
                 </Avatar>
@@ -1092,9 +1538,21 @@ export function FamilyMembers() {
                   disabled={uploadingPhoto}
                 >
                   {uploadingPhoto ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
+                    <div
+                      className="animate-spin rounded-full border-2 border-white border-t-transparent"
+                      style={{
+                        width: getSize(1.25),
+                        height: getSize(1.25),
+                      }}
+                    />
                   ) : (
-                    <Camera className="w-5 h-5 text-white" />
+                    <Camera
+                      className="text-white"
+                      style={{
+                        width: getIconSize(20),
+                        height: getIconSize(20),
+                      }}
+                    />
                   )}
                 </button>
                 <input
@@ -1106,15 +1564,28 @@ export function FamilyMembers() {
                 />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span>{selectedMember?.name}</span>
+                <div className="flex items-center" style={{ gap: getGap(0.5) }}>
+                  <span style={{ fontSize: getFontSize(1.125) }}>
+                    {selectedMember?.name}
+                  </span>
                   {selectedMember?.isOwner && (
-                    <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded font-medium">
+                    <span
+                      className="bg-orange-100 text-orange-700 rounded font-medium"
+                      style={{
+                        fontSize: getFontSize(0.75),
+                        padding: `${0.125 * fontScale}rem ${
+                          0.5 * fontScale
+                        }rem`,
+                      }}
+                    >
                       관리자
                     </span>
                   )}
                 </div>
-                <p className="text-sm font-normal text-gray-500">
+                <p
+                  className="font-normal text-gray-500"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {getLastActiveText(
                     selectedMember?.activity?.lastActiveAt || null
                   )}
@@ -1124,30 +1595,92 @@ export function FamilyMembers() {
           </DialogHeader>
 
           {selectedMember && (
-            <div className="space-y-4 mt-4">
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: getGap(1),
+                marginTop: getGap(1),
+              }}
+            >
               {/* 기본 정보 */}
               <Card className="border-orange-100">
-                <CardContent className="p-4 space-y-3">
-                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <CardContent
+                  style={{
+                    padding: getPadding(1),
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.75),
+                  }}
+                >
+                  <h4
+                    className="font-semibold text-gray-900 flex items-center"
+                    style={{
+                      fontSize: getFontSize(1),
+                      gap: getGap(0.5),
+                    }}
+                  >
                     📋 기본 정보
                   </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 text-sm">
-                      <Phone className="w-4 h-4 text-orange-400" />
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: getGap(0.5),
+                    }}
+                  >
+                    <div
+                      className="flex items-center"
+                      style={{
+                        gap: getGap(0.75),
+                        fontSize: getFontSize(0.875),
+                      }}
+                    >
+                      <Phone
+                        className="text-orange-400"
+                        style={{
+                          width: getIconSize(16),
+                          height: getIconSize(16),
+                        }}
+                      />
                       <span className="text-gray-600">전화번호</span>
                       <span className="ml-auto font-medium">
                         {formatPhoneNumber(selectedMember.phone || "")}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <Mail className="w-4 h-4 text-orange-400" />
+                    <div
+                      className="flex items-center"
+                      style={{
+                        gap: getGap(0.75),
+                        fontSize: getFontSize(0.875),
+                      }}
+                    >
+                      <Mail
+                        className="text-orange-400"
+                        style={{
+                          width: getIconSize(16),
+                          height: getIconSize(16),
+                        }}
+                      />
                       <span className="text-gray-600">이메일</span>
                       <span className="ml-auto font-medium">
                         {selectedMember.email}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <Calendar className="w-4 h-4 text-orange-400" />
+                    <div
+                      className="flex items-center"
+                      style={{
+                        gap: getGap(0.75),
+                        fontSize: getFontSize(0.875),
+                      }}
+                    >
+                      <Calendar
+                        className="text-orange-400"
+                        style={{
+                          width: getIconSize(16),
+                          height: getIconSize(16),
+                        }}
+                      />
                       <span className="text-gray-600">가입일</span>
                       <span className="ml-auto font-medium">
                         {formatDate(selectedMember.joinedDate)}
@@ -1157,104 +1690,261 @@ export function FamilyMembers() {
                 </CardContent>
               </Card>
 
-              {/* 활동 통계 (클릭 가능) */}
+              {/* 활동 통계 */}
               <Card className="border-orange-100">
-                <CardContent className="p-4 space-y-3">
-                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <CardContent
+                  style={{
+                    padding: getPadding(1),
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.75),
+                  }}
+                >
+                  <h4
+                    className="font-semibold text-gray-900 flex items-center"
+                    style={{
+                      fontSize: getFontSize(1),
+                      gap: getGap(0.5),
+                    }}
+                  >
                     📊 활동 통계
-                    <span className="text-xs font-normal text-gray-400">
+                    <span
+                      className="font-normal text-gray-400"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
                       클릭하여 상세 보기
                     </span>
                   </h4>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div
+                    className="grid grid-cols-3"
+                    style={{ gap: getGap(0.75) }}
+                  >
                     {/* 식사 기록 */}
                     <button
-                      className="bg-orange-50 rounded-lg p-3 text-center hover:bg-orange-100 transition-colors group"
+                      className="bg-orange-50 rounded-lg text-center hover:bg-orange-100 transition-colors group"
+                      style={{ padding: getPadding(0.75) }}
                       onClick={() =>
                         handleActivityClick(selectedMember, "meal")
                       }
                     >
-                      <Utensils className="w-5 h-5 text-orange-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                      <p className="text-2xl font-bold text-orange-600">
+                      <Utensils
+                        className="text-orange-500 mx-auto group-hover:scale-110 transition-transform"
+                        style={{
+                          width: getIconSize(20),
+                          height: getIconSize(20),
+                          marginBottom: getGap(0.25),
+                        }}
+                      />
+                      <p
+                        className="font-bold text-orange-600"
+                        style={{ fontSize: getFontSize(1.5) }}
+                      >
                         {selectedMember.activity?.mealCount || 0}
                       </p>
-                      <p className="text-xs text-gray-500">식사 기록</p>
-                      <ChevronRight className="w-3 h-3 text-orange-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <p
+                        className="text-gray-500"
+                        style={{ fontSize: getFontSize(0.75) }}
+                      >
+                        식사 기록
+                      </p>
+                      <ChevronRight
+                        className="text-orange-400 mx-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          width: getIconSize(12),
+                          height: getIconSize(12),
+                          marginTop: getGap(0.25),
+                        }}
+                      />
                     </button>
 
                     {/* 일정 등록 */}
                     <button
-                      className="bg-blue-50 rounded-lg p-3 text-center hover:bg-blue-100 transition-colors group"
+                      className="bg-blue-50 rounded-lg text-center hover:bg-blue-100 transition-colors group"
+                      style={{ padding: getPadding(0.75) }}
                       onClick={() =>
                         handleActivityClick(selectedMember, "schedule")
                       }
                     >
-                      <Calendar className="w-5 h-5 text-blue-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                      <p className="text-2xl font-bold text-blue-600">
+                      <Calendar
+                        className="text-blue-500 mx-auto group-hover:scale-110 transition-transform"
+                        style={{
+                          width: getIconSize(20),
+                          height: getIconSize(20),
+                          marginBottom: getGap(0.25),
+                        }}
+                      />
+                      <p
+                        className="font-bold text-blue-600"
+                        style={{ fontSize: getFontSize(1.5) }}
+                      >
                         {selectedMember.activity?.scheduleCount || 0}
                       </p>
-                      <p className="text-xs text-gray-500">일정 등록</p>
-                      <ChevronRight className="w-3 h-3 text-blue-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <p
+                        className="text-gray-500"
+                        style={{ fontSize: getFontSize(0.75) }}
+                      >
+                        일정 등록
+                      </p>
+                      <ChevronRight
+                        className="text-blue-400 mx-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          width: getIconSize(12),
+                          height: getIconSize(12),
+                          marginTop: getGap(0.25),
+                        }}
+                      />
                     </button>
 
                     {/* 투약 기록 */}
                     <button
-                      className="bg-green-50 rounded-lg p-3 text-center hover:bg-green-100 transition-colors group"
+                      className="bg-green-50 rounded-lg text-center hover:bg-green-100 transition-colors group"
+                      style={{ padding: getPadding(0.75) }}
                       onClick={() =>
                         handleActivityClick(selectedMember, "medication")
                       }
                     >
-                      <Pill className="w-5 h-5 text-green-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                      <p className="text-2xl font-bold text-green-600">
+                      <Pill
+                        className="text-green-500 mx-auto group-hover:scale-110 transition-transform"
+                        style={{
+                          width: getIconSize(20),
+                          height: getIconSize(20),
+                          marginBottom: getGap(0.25),
+                        }}
+                      />
+                      <p
+                        className="font-bold text-green-600"
+                        style={{ fontSize: getFontSize(1.5) }}
+                      >
                         {selectedMember.activity?.medicationCount || 0}
                       </p>
-                      <p className="text-xs text-gray-500">투약 기록</p>
-                      <ChevronRight className="w-3 h-3 text-green-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <p
+                        className="text-gray-500"
+                        style={{ fontSize: getFontSize(0.75) }}
+                      >
+                        투약 기록
+                      </p>
+                      <ChevronRight
+                        className="text-green-400 mx-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          width: getIconSize(12),
+                          height: getIconSize(12),
+                          marginTop: getGap(0.25),
+                        }}
+                      />
                     </button>
 
                     {/* 수면 기록 */}
                     <button
-                      className="bg-indigo-50 rounded-lg p-3 text-center hover:bg-indigo-100 transition-colors group"
+                      className="bg-indigo-50 rounded-lg text-center hover:bg-indigo-100 transition-colors group"
+                      style={{ padding: getPadding(0.75) }}
                       onClick={() =>
                         handleActivityClick(selectedMember, "sleep")
                       }
                     >
-                      <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                      <p className="text-2xl font-bold text-indigo-600">
+                      <Moon
+                        className="text-indigo-500 mx-auto group-hover:scale-110 transition-transform"
+                        style={{
+                          width: getIconSize(20),
+                          height: getIconSize(20),
+                          marginBottom: getGap(0.25),
+                        }}
+                      />
+                      <p
+                        className="font-bold text-indigo-600"
+                        style={{ fontSize: getFontSize(1.5) }}
+                      >
                         {selectedMember.activity?.sleepCount || 0}
                       </p>
-                      <p className="text-xs text-gray-500">수면 기록</p>
-                      <ChevronRight className="w-3 h-3 text-indigo-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <p
+                        className="text-gray-500"
+                        style={{ fontSize: getFontSize(0.75) }}
+                      >
+                        수면 기록
+                      </p>
+                      <ChevronRight
+                        className="text-indigo-400 mx-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          width: getIconSize(12),
+                          height: getIconSize(12),
+                          marginTop: getGap(0.25),
+                        }}
+                      />
                     </button>
 
                     {/* 커뮤니티 */}
                     <button
-                      className="bg-pink-50 rounded-lg p-3 text-center hover:bg-pink-100 transition-colors group"
+                      className="bg-pink-50 rounded-lg text-center hover:bg-pink-100 transition-colors group"
+                      style={{ padding: getPadding(0.75) }}
                       onClick={() =>
                         handleActivityClick(selectedMember, "community")
                       }
                     >
-                      <Users className="w-5 h-5 text-pink-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                      <p className="text-2xl font-bold text-pink-600">
+                      <Users
+                        className="text-pink-500 mx-auto group-hover:scale-110 transition-transform"
+                        style={{
+                          width: getIconSize(20),
+                          height: getIconSize(20),
+                          marginBottom: getGap(0.25),
+                        }}
+                      />
+                      <p
+                        className="font-bold text-pink-600"
+                        style={{ fontSize: getFontSize(1.5) }}
+                      >
                         {selectedMember.activity?.communityCount || 0}
                       </p>
-                      <p className="text-xs text-gray-500">커뮤니티</p>
-                      <ChevronRight className="w-3 h-3 text-pink-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <p
+                        className="text-gray-500"
+                        style={{ fontSize: getFontSize(0.75) }}
+                      >
+                        커뮤니티
+                      </p>
+                      <ChevronRight
+                        className="text-pink-400 mx-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          width: getIconSize(12),
+                          height: getIconSize(12),
+                          marginTop: getGap(0.25),
+                        }}
+                      />
                     </button>
 
                     {/* 총 활동 */}
                     <button
-                      className="bg-purple-50 rounded-lg p-3 text-center hover:bg-purple-100 transition-colors group"
+                      className="bg-purple-50 rounded-lg text-center hover:bg-purple-100 transition-colors group"
+                      style={{ padding: getPadding(0.75) }}
                       onClick={() =>
                         handleActivityClick(selectedMember, "total")
                       }
                     >
-                      <Activity className="w-5 h-5 text-purple-500 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                      <p className="text-2xl font-bold text-purple-600">
+                      <Activity
+                        className="text-purple-500 mx-auto group-hover:scale-110 transition-transform"
+                        style={{
+                          width: getIconSize(20),
+                          height: getIconSize(20),
+                          marginBottom: getGap(0.25),
+                        }}
+                      />
+                      <p
+                        className="font-bold text-purple-600"
+                        style={{ fontSize: getFontSize(1.5) }}
+                      >
                         {getTotalActivity(selectedMember.activity)}
                       </p>
-                      <p className="text-xs text-gray-500">총 활동</p>
-                      <ChevronRight className="w-3 h-3 text-purple-400 mx-auto mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <p
+                        className="text-gray-500"
+                        style={{ fontSize: getFontSize(0.75) }}
+                      >
+                        총 활동
+                      </p>
+                      <ChevronRight
+                        className="text-purple-400 mx-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{
+                          width: getIconSize(12),
+                          height: getIconSize(12),
+                          marginTop: getGap(0.25),
+                        }}
+                      />
                     </button>
                   </div>
                 </CardContent>
@@ -1262,21 +1952,56 @@ export function FamilyMembers() {
 
               {/* 최근 활동 */}
               <Card className="border-orange-100">
-                <CardContent className="p-4 space-y-3">
-                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <CardContent
+                  style={{
+                    padding: getPadding(1),
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.75),
+                  }}
+                >
+                  <h4
+                    className="font-semibold text-gray-900 flex items-center"
+                    style={{
+                      fontSize: getFontSize(1),
+                      gap: getGap(0.5),
+                    }}
+                  >
                     🕐 최근 활동
                   </h4>
-                  <div className="space-y-2 text-sm">
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: getGap(0.5),
+                      fontSize: getFontSize(0.875),
+                    }}
+                  >
                     {selectedMember.activity?.lastActiveAt ? (
-                      <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                        <Activity className="w-4 h-4 text-orange-400" />
+                      <div
+                        className="flex items-center bg-gray-50 rounded-lg"
+                        style={{
+                          gap: getGap(0.5),
+                          padding: getPadding(0.5),
+                        }}
+                      >
+                        <Activity
+                          className="text-orange-400"
+                          style={{
+                            width: getIconSize(16),
+                            height: getIconSize(16),
+                          }}
+                        />
                         <span className="text-gray-600">마지막 활동</span>
                         <span className="ml-auto text-gray-900">
                           {formatDate(selectedMember.activity.lastActiveAt)}
                         </span>
                       </div>
                     ) : (
-                      <div className="text-center py-4 text-gray-400">
+                      <div
+                        className="text-center text-gray-400"
+                        style={{ padding: getPadding(1) }}
+                      >
                         아직 활동 기록이 없습니다
                       </div>
                     )}
@@ -1285,7 +2010,7 @@ export function FamilyMembers() {
               </Card>
 
               {/* 액션 버튼 */}
-              <div className="flex gap-2">
+              <div className="flex" style={{ gap: getGap(0.5) }}>
                 <Button
                   variant="outline"
                   className="flex-1 border-orange-200 text-orange-600 hover:bg-orange-50"
@@ -1296,8 +2021,18 @@ export function FamilyMembers() {
                       toast.error("전화번호가 등록되지 않았습니다");
                     }
                   }}
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    padding: `${0.625 * fontScale}rem`,
+                  }}
                 >
-                  <Phone className="w-4 h-4 mr-2" />
+                  <Phone
+                    style={{
+                      width: getIconSize(16),
+                      height: getIconSize(16),
+                      marginRight: 8 * fontScale,
+                    }}
+                  />
                   전화하기
                 </Button>
                 <Button
@@ -1306,8 +2041,18 @@ export function FamilyMembers() {
                   onClick={() => {
                     window.location.href = `mailto:${selectedMember.email}`;
                   }}
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    padding: `${0.625 * fontScale}rem`,
+                  }}
                 >
-                  <Mail className="w-4 h-4 mr-2" />
+                  <Mail
+                    style={{
+                      width: getIconSize(16),
+                      height: getIconSize(16),
+                      marginRight: 8 * fontScale,
+                    }}
+                  />
                   이메일
                 </Button>
               </div>
@@ -1318,8 +2063,18 @@ export function FamilyMembers() {
                   variant="outline"
                   className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
                   onClick={() => handleOpenDeleteDialog(selectedMember)}
+                  style={{
+                    fontSize: getFontSize(0.875),
+                    padding: `${0.625 * fontScale}rem`,
+                  }}
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
+                  <Trash2
+                    style={{
+                      width: getIconSize(16),
+                      height: getIconSize(16),
+                      marginRight: 8 * fontScale,
+                    }}
+                  />
                   구성원에서 삭제
                 </Button>
               )}
@@ -1335,7 +2090,10 @@ export function FamilyMembers() {
       >
         <DialogContent className="border-orange-100 max-w-md max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle
+              className="flex items-center"
+              style={{ gap: getGap(0.5) }}
+            >
               {selectedActivityType && (
                 <>
                   {(() => {
@@ -1344,11 +2102,21 @@ export function FamilyMembers() {
                     return (
                       <>
                         <div
-                          className={`w-8 h-8 bg-${info.color}-100 rounded-lg flex items-center justify-center`}
+                          className={`bg-${info.color}-100 rounded-lg flex items-center justify-center`}
+                          style={{
+                            width: getSize(2),
+                            height: getSize(2),
+                          }}
                         >
-                          <Icon className={`w-4 h-4 text-${info.color}-600`} />
+                          <Icon
+                            className={`text-${info.color}-600`}
+                            style={{
+                              width: getIconSize(16),
+                              height: getIconSize(16),
+                            }}
+                          />
                         </div>
-                        <span>
+                        <span style={{ fontSize: getFontSize(1.125) }}>
                           {selectedMember?.name}님의 {info.label}
                         </span>
                       </>
@@ -1359,16 +2127,48 @@ export function FamilyMembers() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto space-y-3 mt-4">
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: getGap(0.75),
+              marginTop: getGap(1),
+            }}
+          >
             {loadingRecords ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-2"></div>
-                <p className="text-gray-500">기록을 불러오는 중...</p>
+              <div className="text-center" style={{ padding: getPadding(2) }}>
+                <div
+                  className="animate-spin rounded-full border-b-2 border-orange-500 mx-auto"
+                  style={{
+                    width: getSize(2),
+                    height: getSize(2),
+                    marginBottom: getGap(0.5),
+                  }}
+                ></div>
+                <p
+                  className="text-gray-500"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
+                  기록을 불러오는 중...
+                </p>
               </div>
             ) : activityRecords.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Activity className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-                <p>아직 기록이 없습니다</p>
+              <div
+                className="text-center text-gray-500"
+                style={{ padding: getPadding(2) }}
+              >
+                <Activity
+                  className="mx-auto text-gray-200"
+                  style={{
+                    width: getIconSize(48),
+                    height: getIconSize(48),
+                    marginBottom: getGap(0.75),
+                  }}
+                />
+                <p style={{ fontSize: getFontSize(0.875) }}>
+                  아직 기록이 없습니다
+                </p>
               </div>
             ) : (
               activityRecords.map((record) => (
@@ -1385,45 +2185,94 @@ export function FamilyMembers() {
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="border-red-100 max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="w-5 h-5" />
+            <DialogTitle
+              className="flex items-center text-red-600"
+              style={{ gap: getGap(0.5), fontSize: getFontSize(1.125) }}
+            >
+              <AlertTriangle
+                style={{
+                  width: getIconSize(20),
+                  height: getIconSize(20),
+                }}
+              />
               구성원 삭제
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
-            <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg border border-red-100">
-              <Avatar className="w-10 h-10">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: getGap(1),
+              marginTop: getGap(1),
+            }}
+          >
+            <div
+              className="flex items-center bg-red-50 rounded-lg border border-red-100"
+              style={{ gap: getGap(0.75), padding: getPadding(0.75) }}
+            >
+              <Avatar
+                style={{
+                  width: getSize(2.5),
+                  height: getSize(2.5),
+                }}
+              >
                 {memberToDelete?.avatarUrl ? (
                   <AvatarImage
                     src={memberToDelete.avatarUrl}
                     alt={memberToDelete.name}
                   />
                 ) : null}
-                <AvatarFallback className="bg-red-100 text-red-600 font-medium">
+                <AvatarFallback
+                  className="bg-red-100 text-red-600 font-medium"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {memberToDelete?.name[0]}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="font-medium text-gray-900">
+                <p
+                  className="font-medium text-gray-900"
+                  style={{ fontSize: getFontSize(0.875) }}
+                >
                   {memberToDelete?.name}
                 </p>
-                <p className="text-sm text-gray-500">{memberToDelete?.email}</p>
+                <p
+                  className="text-gray-500"
+                  style={{ fontSize: getFontSize(0.75) }}
+                >
+                  {memberToDelete?.email}
+                </p>
               </div>
             </div>
 
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-sm text-yellow-800">
+            <div
+              className="bg-yellow-50 border border-yellow-200 rounded-lg"
+              style={{ padding: getPadding(0.75) }}
+            >
+              <p
+                className="text-yellow-800"
+                style={{ fontSize: getFontSize(0.875) }}
+              >
                 ⚠️ <strong>{memberToDelete?.name}</strong>님을 가족 구성원에서
                 삭제하시겠습니까?
               </p>
-              <ul className="text-xs text-yellow-700 mt-2 space-y-1 list-disc list-inside">
+              <ul
+                className="text-yellow-700 list-disc list-inside"
+                style={{
+                  fontSize: getFontSize(0.75),
+                  marginTop: getGap(0.5),
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: getGap(0.25),
+                }}
+              >
                 <li>삭제 후에도 해당 구성원의 기존 기록은 유지됩니다</li>
                 <li>다시 초대하여 구성원으로 추가할 수 있습니다</li>
               </ul>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex" style={{ gap: getGap(0.5) }}>
               <Button
                 variant="outline"
                 className="flex-1 border-gray-200"
@@ -1432,6 +2281,10 @@ export function FamilyMembers() {
                   setMemberToDelete(null);
                 }}
                 disabled={isDeleting}
+                style={{
+                  fontSize: getFontSize(0.875),
+                  padding: `${0.625 * fontScale}rem`,
+                }}
               >
                 취소
               </Button>
@@ -1439,15 +2292,34 @@ export function FamilyMembers() {
                 className="flex-1 bg-red-500 hover:bg-red-600 text-white"
                 onClick={handleDeleteMember}
                 disabled={isDeleting}
+                style={{
+                  fontSize: getFontSize(0.875),
+                  padding: `${0.625 * fontScale}rem`,
+                }}
               >
                 {isDeleting ? (
-                  <span className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span
+                    className="flex items-center"
+                    style={{ gap: getGap(0.5) }}
+                  >
+                    <div
+                      className="animate-spin rounded-full border-2 border-white border-t-transparent"
+                      style={{
+                        width: getSize(1),
+                        height: getSize(1),
+                      }}
+                    />
                     삭제 중...
                   </span>
                 ) : (
                   <>
-                    <Trash2 className="w-4 h-4 mr-2" />
+                    <Trash2
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginRight: 8 * fontScale,
+                      }}
+                    />
                     삭제하기
                   </>
                 )}
@@ -1460,33 +2332,64 @@ export function FamilyMembers() {
       {/* 전체 활동 통계 (하단) - 개선된 버전 */}
       {members.length > 0 && (
         <Card className="border-orange-100">
-          <CardContent className="p-4">
+          <CardContent style={{ padding: getPadding(1) }}>
             {/* 헤더 + 토글 */}
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-gray-900 font-semibold flex items-center gap-2">
+            <div
+              className="flex items-center justify-between"
+              style={{ marginBottom: getGap(1) }}
+            >
+              <h3
+                className="text-gray-900 font-semibold flex items-center"
+                style={{ fontSize: getFontSize(1), gap: getGap(0.5) }}
+              >
                 📊 활동 통계
               </h3>
-              <div className="flex bg-gray-100 rounded-lg p-1">
+              <div
+                className="flex bg-gray-100 rounded-lg"
+                style={{ padding: getPadding(0.25) }}
+              >
                 <button
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  className={`rounded-md transition-colors ${
                     statsViewMode === "total"
                       ? "bg-white text-orange-600 shadow-sm"
                       : "text-gray-500 hover:text-gray-700"
                   }`}
+                  style={{
+                    padding: `${0.375 * fontScale}rem ${0.75 * fontScale}rem`,
+                    fontSize: getFontSize(0.75),
+                  }}
                   onClick={() => setStatsViewMode("total")}
                 >
-                  <BarChart3 className="w-3 h-3 inline mr-1" />
+                  <BarChart3
+                    style={{
+                      width: getIconSize(12),
+                      height: getIconSize(12),
+                      display: "inline",
+                      marginRight: 4 * fontScale,
+                    }}
+                  />
                   전체 합산
                 </button>
                 <button
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  className={`rounded-md transition-colors ${
                     statsViewMode === "individual"
                       ? "bg-white text-orange-600 shadow-sm"
                       : "text-gray-500 hover:text-gray-700"
                   }`}
+                  style={{
+                    padding: `${0.375 * fontScale}rem ${0.75 * fontScale}rem`,
+                    fontSize: getFontSize(0.75),
+                  }}
                   onClick={() => setStatsViewMode("individual")}
                 >
-                  <User className="w-3 h-3 inline mr-1" />
+                  <User
+                    style={{
+                      width: getIconSize(12),
+                      height: getIconSize(12),
+                      display: "inline",
+                      marginRight: 4 * fontScale,
+                    }}
+                  />
                   개인별
                 </button>
               </div>
@@ -1494,56 +2397,181 @@ export function FamilyMembers() {
 
             {/* 전체 합산 통계 */}
             {statsViewMode === "total" && (
-              <div className="space-y-4">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: getGap(1),
+                }}
+              >
                 {/* 전체 합산 숫자 카드 */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-orange-50 rounded-lg p-3 text-center">
-                    <Utensils className="w-4 h-4 text-orange-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-orange-600">
+                <div className="grid grid-cols-3" style={{ gap: getGap(0.5) }}>
+                  <div
+                    className="bg-orange-50 rounded-lg text-center"
+                    style={{ padding: getPadding(0.75) }}
+                  >
+                    <Utensils
+                      className="text-orange-500 mx-auto"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginBottom: getGap(0.25),
+                      }}
+                    />
+                    <p
+                      className="font-bold text-orange-600"
+                      style={{ fontSize: getFontSize(1.25) }}
+                    >
                       {totalStats.mealCount}
                     </p>
-                    <p className="text-xs text-gray-500">식사</p>
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
+                      식사
+                    </p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <Calendar className="w-4 h-4 text-blue-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-blue-600">
+                  <div
+                    className="bg-blue-50 rounded-lg text-center"
+                    style={{ padding: getPadding(0.75) }}
+                  >
+                    <Calendar
+                      className="text-blue-500 mx-auto"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginBottom: getGap(0.25),
+                      }}
+                    />
+                    <p
+                      className="font-bold text-blue-600"
+                      style={{ fontSize: getFontSize(1.25) }}
+                    >
                       {totalStats.scheduleCount}
                     </p>
-                    <p className="text-xs text-gray-500">일정</p>
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
+                      일정
+                    </p>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <Pill className="w-4 h-4 text-green-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-green-600">
+                  <div
+                    className="bg-green-50 rounded-lg text-center"
+                    style={{ padding: getPadding(0.75) }}
+                  >
+                    <Pill
+                      className="text-green-500 mx-auto"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginBottom: getGap(0.25),
+                      }}
+                    />
+                    <p
+                      className="font-bold text-green-600"
+                      style={{ fontSize: getFontSize(1.25) }}
+                    >
                       {totalStats.medicationCount}
                     </p>
-                    <p className="text-xs text-gray-500">투약</p>
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
+                      투약
+                    </p>
                   </div>
-                  <div className="bg-indigo-50 rounded-lg p-3 text-center">
-                    <Moon className="w-4 h-4 text-indigo-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-indigo-600">
+                  <div
+                    className="bg-indigo-50 rounded-lg text-center"
+                    style={{ padding: getPadding(0.75) }}
+                  >
+                    <Moon
+                      className="text-indigo-500 mx-auto"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginBottom: getGap(0.25),
+                      }}
+                    />
+                    <p
+                      className="font-bold text-indigo-600"
+                      style={{ fontSize: getFontSize(1.25) }}
+                    >
                       {totalStats.sleepCount}
                     </p>
-                    <p className="text-xs text-gray-500">수면</p>
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
+                      수면
+                    </p>
                   </div>
-                  <div className="bg-pink-50 rounded-lg p-3 text-center">
-                    <Users className="w-4 h-4 text-pink-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-pink-600">
+                  <div
+                    className="bg-pink-50 rounded-lg text-center"
+                    style={{ padding: getPadding(0.75) }}
+                  >
+                    <Users
+                      className="text-pink-500 mx-auto"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginBottom: getGap(0.25),
+                      }}
+                    />
+                    <p
+                      className="font-bold text-pink-600"
+                      style={{ fontSize: getFontSize(1.25) }}
+                    >
                       {totalStats.communityCount}
                     </p>
-                    <p className="text-xs text-gray-500">커뮤니티</p>
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
+                      커뮤니티
+                    </p>
                   </div>
-                  <div className="bg-purple-50 rounded-lg p-3 text-center">
-                    <Activity className="w-4 h-4 text-purple-500 mx-auto mb-1" />
-                    <p className="text-xl font-bold text-purple-600">
+                  <div
+                    className="bg-purple-50 rounded-lg text-center"
+                    style={{ padding: getPadding(0.75) }}
+                  >
+                    <Activity
+                      className="text-purple-500 mx-auto"
+                      style={{
+                        width: getIconSize(16),
+                        height: getIconSize(16),
+                        marginBottom: getGap(0.25),
+                      }}
+                    />
+                    <p
+                      className="font-bold text-purple-600"
+                      style={{ fontSize: getFontSize(1.25) }}
+                    >
                       {grandTotal}
                     </p>
-                    <p className="text-xs text-gray-500">총 활동</p>
+                    <p
+                      className="text-gray-500"
+                      style={{ fontSize: getFontSize(0.75) }}
+                    >
+                      총 활동
+                    </p>
                   </div>
                 </div>
 
                 {/* 구성원별 기여도 막대 */}
-                <div className="space-y-2 pt-2 border-t border-orange-100">
-                  <p className="text-xs text-gray-500 font-medium">
+                <div
+                  className="border-t border-orange-100"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: getGap(0.5),
+                    paddingTop: getGap(0.5),
+                  }}
+                >
+                  <p
+                    className="text-gray-500 font-medium"
+                    style={{ fontSize: getFontSize(0.75) }}
+                  >
                     구성원별 활동 기여도
                   </p>
                   {members.map((member) => {
@@ -1551,28 +2579,55 @@ export function FamilyMembers() {
                     const percentage =
                       grandTotal > 0 ? (memberTotal / grandTotal) * 100 : 0;
                     return (
-                      <div key={member.id} className="flex items-center gap-2">
-                        <Avatar className="w-6 h-6">
+                      <div
+                        key={member.id}
+                        className="flex items-center"
+                        style={{ gap: getGap(0.5) }}
+                      >
+                        <Avatar
+                          style={{
+                            width: getSize(1.5),
+                            height: getSize(1.5),
+                          }}
+                        >
                           {member.avatarUrl ? (
                             <AvatarImage
                               src={member.avatarUrl}
                               alt={member.name}
                             />
                           ) : null}
-                          <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
+                          <AvatarFallback
+                            className="bg-orange-100 text-orange-600"
+                            style={{ fontSize: getFontSize(0.625) }}
+                          >
                             {member.name[0]}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-xs text-gray-600 w-16 truncate">
+                        <span
+                          className="text-gray-600 truncate"
+                          style={{
+                            fontSize: getFontSize(0.75),
+                            width: getSize(4),
+                          }}
+                        >
                           {member.name}
                         </span>
-                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="flex-1 bg-gray-100 rounded-full overflow-hidden"
+                          style={{ height: getSize(1) }}
+                        >
                           <div
                             className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full transition-all duration-500"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
-                        <span className="text-xs font-medium text-gray-700 w-12 text-right">
+                        <span
+                          className="font-medium text-gray-700 text-right"
+                          style={{
+                            fontSize: getFontSize(0.75),
+                            width: getSize(3),
+                          }}
+                        >
                           {memberTotal}건
                         </span>
                       </div>
@@ -1584,59 +2639,142 @@ export function FamilyMembers() {
 
             {/* 개인별 통계 */}
             {statsViewMode === "individual" && (
-              <div className="space-y-2">
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: getGap(0.5),
+                }}
+              >
                 {members.map((member) => (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between py-2 border-b border-orange-50 last:border-0 cursor-pointer hover:bg-orange-50 rounded-lg px-2 -mx-2 transition-colors"
+                    className="flex items-center justify-between border-b border-orange-50 last:border-0 cursor-pointer hover:bg-orange-50 rounded-lg transition-colors"
+                    style={{
+                      padding: `${0.5 * fontScale}rem ${0.5 * fontScale}rem`,
+                      margin: `0 ${-0.5 * fontScale}rem`,
+                    }}
                     onClick={() => handleMemberClick(member)}
                   >
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-6 h-6">
+                    <div
+                      className="flex items-center"
+                      style={{ gap: getGap(0.5) }}
+                    >
+                      <Avatar
+                        style={{
+                          width: getSize(1.5),
+                          height: getSize(1.5),
+                        }}
+                      >
                         {member.avatarUrl ? (
                           <AvatarImage
                             src={member.avatarUrl}
                             alt={member.name}
                           />
                         ) : null}
-                        <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
+                        <AvatarFallback
+                          className="bg-orange-100 text-orange-600"
+                          style={{ fontSize: getFontSize(0.625) }}
+                        >
                           {member.name[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">{member.name}</span>
+                      <span
+                        className="font-medium"
+                        style={{ fontSize: getFontSize(0.875) }}
+                      >
+                        {member.name}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Utensils className="w-3 h-3 text-orange-400" />
+                    <div
+                      className="flex items-center"
+                      style={{
+                        gap: getGap(0.5),
+                        fontSize: getFontSize(0.875),
+                      }}
+                    >
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Utensils
+                          className="text-orange-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span className="text-orange-600 font-medium">
                           {member.activity?.mealCount || 0}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-blue-400" />
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Calendar
+                          className="text-blue-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span className="text-blue-600 font-medium">
                           {member.activity?.scheduleCount || 0}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Pill className="w-3 h-3 text-green-400" />
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Pill
+                          className="text-green-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span className="text-green-600 font-medium">
                           {member.activity?.medicationCount || 0}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Moon className="w-3 h-3 text-indigo-400" />
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Moon
+                          className="text-indigo-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span className="text-indigo-600 font-medium">
                           {member.activity?.sleepCount || 0}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Users className="w-3 h-3 text-pink-400" />
+                      <div
+                        className="flex items-center"
+                        style={{ gap: getGap(0.25) }}
+                      >
+                        <Users
+                          className="text-pink-400"
+                          style={{
+                            width: getIconSize(12),
+                            height: getIconSize(12),
+                          }}
+                        />
                         <span className="text-pink-600 font-medium">
                           {member.activity?.communityCount || 0}
                         </span>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                      <ChevronRight
+                        className="text-gray-400"
+                        style={{
+                          width: getIconSize(16),
+                          height: getIconSize(16),
+                        }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1644,25 +2782,77 @@ export function FamilyMembers() {
             )}
 
             {/* 범례 */}
-            <div className="flex flex-wrap items-center justify-center gap-3 mt-4 pt-3 border-t border-orange-100">
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Utensils className="w-3 h-3 text-orange-400" />
+            <div
+              className="flex flex-wrap items-center justify-center border-t border-orange-100"
+              style={{
+                gap: getGap(0.75),
+                marginTop: getGap(1),
+                paddingTop: getGap(0.75),
+              }}
+            >
+              <div
+                className="flex items-center text-gray-500"
+                style={{ gap: getGap(0.25), fontSize: getFontSize(0.75) }}
+              >
+                <Utensils
+                  className="text-orange-400"
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>식사</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Calendar className="w-3 h-3 text-blue-400" />
+              <div
+                className="flex items-center text-gray-500"
+                style={{ gap: getGap(0.25), fontSize: getFontSize(0.75) }}
+              >
+                <Calendar
+                  className="text-blue-400"
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>일정</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Pill className="w-3 h-3 text-green-400" />
+              <div
+                className="flex items-center text-gray-500"
+                style={{ gap: getGap(0.25), fontSize: getFontSize(0.75) }}
+              >
+                <Pill
+                  className="text-green-400"
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>투약</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Moon className="w-3 h-3 text-indigo-400" />
+              <div
+                className="flex items-center text-gray-500"
+                style={{ gap: getGap(0.25), fontSize: getFontSize(0.75) }}
+              >
+                <Moon
+                  className="text-indigo-400"
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>수면</span>
               </div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <Users className="w-3 h-3 text-pink-400" />
+              <div
+                className="flex items-center text-gray-500"
+                style={{ gap: getGap(0.25), fontSize: getFontSize(0.75) }}
+              >
+                <Users
+                  className="text-pink-400"
+                  style={{
+                    width: getIconSize(12),
+                    height: getIconSize(12),
+                  }}
+                />
                 <span>커뮤니티</span>
               </div>
             </div>

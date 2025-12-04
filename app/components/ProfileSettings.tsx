@@ -24,29 +24,41 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { apiClient } from "../utils/api";
 import { toast } from "sonner";
 
-// [수정 1] joinedDate 필드 추가 (API에서 보내주는 값)
 interface UserProfile {
   id: string;
   name: string;
   email: string;
   phone?: string;
   avatar_url?: string;
-  created_at?: string; // DB 생성일
-  joinedDate?: string; // Auth 가입일 (실제 가입일)
+  created_at?: string;
+  joinedDate?: string;
 }
 
-export function ProfileSettings() {
+interface ProfileSettingsProps {
+  fontScale?: number;
+  onSignOut?: () => void;
+}
+
+export function ProfileSettings({
+  fontScale = 1,
+  onSignOut,
+}: ProfileSettingsProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // 편집 폼 상태
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 아이콘 크기 계산
+  const getIconSize = (base: number) => base * fontScale;
+
+  // 아바타 크기 계산
+  const getAvatarSize = (base: number) => base * fontScale;
 
   useEffect(() => {
     loadProfile();
@@ -56,7 +68,6 @@ export function ProfileSettings() {
     try {
       const { data } = await apiClient.getMyProfile();
       if (data) {
-        // API 데이터와 인터페이스 타입 매칭
         setProfile(data as unknown as UserProfile);
         setEditName(data.name || "");
         setEditPhone(data.phone || "");
@@ -71,23 +82,25 @@ export function ProfileSettings() {
   const handleLogout = async () => {
     if (!confirm("로그아웃 하시겠습니까?")) return;
     try {
-      await apiClient.signOut();
-      toast.success("로그아웃 되었습니다.");
-      window.location.href = "/";
+      if (onSignOut) {
+        onSignOut();
+      } else {
+        await apiClient.signOut();
+        toast.success("로그아웃 되었습니다.");
+        window.location.href = "/";
+      }
     } catch (error) {
       console.error("Logout failed:", error);
       toast.error("로그아웃 중 오류가 발생했습니다.");
     }
   };
 
-  // [수정 2] 사진 업로드 로직 전면 수정
   const handlePhotoUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // 파일 유효성 검사
     if (file.size > 5 * 1024 * 1024) {
       toast.error("파일 크기는 5MB 이하여야 합니다");
       return;
@@ -102,10 +115,7 @@ export function ProfileSettings() {
       const formData = new FormData();
       formData.append("file", file);
 
-      // ✨ 중요: uploadMyProfilePhoto 사용 및 응답 구조 정확히 분해
       const response = await apiClient.uploadMyProfilePhoto(formData);
-
-      // api.ts의 리턴값 구조: { data: { publicUrl: "..." } }
       const newAvatarUrl = response.data.publicUrl;
 
       if (newAvatarUrl) {
@@ -113,9 +123,6 @@ export function ProfileSettings() {
           prev ? { ...prev, avatar_url: newAvatarUrl } : null
         );
         toast.success("프로필 사진이 업데이트되었습니다!");
-
-        // 강제 리렌더링을 위한 꼼수 (혹시 모를 캐시 문제 방지)
-        // await loadProfile(); // 필요하다면 주석 해제
       } else {
         throw new Error("이미지 URL을 받아오지 못했습니다.");
       }
@@ -158,7 +165,6 @@ export function ProfileSettings() {
       });
 
       if (data) {
-        // 데이터 갱신 후 다시 로드
         await loadProfile();
       }
       setIsEditDialogOpen(false);
@@ -203,38 +209,74 @@ export function ProfileSettings() {
   return (
     <div className="space-y-4 pb-20 md:pb-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">마이페이지</h2>
+        <h2
+          className="font-bold"
+          style={{ fontSize: `${1.25 * fontScale}rem` }}
+        >
+          마이페이지
+        </h2>
       </div>
 
       {/* 프로필 카드 */}
       <Card className="border-orange-100 overflow-hidden">
-        <div className="h-24 bg-gradient-to-r from-orange-400 to-orange-500"></div>
+        <div
+          className="bg-gradient-to-r from-orange-400 to-orange-500"
+          style={{ height: `${6 * fontScale}rem` }}
+        ></div>
 
-        <CardContent className="relative px-6 pb-6">
-          <div className="relative -mt-12 mb-4">
+        <CardContent
+          className="relative"
+          style={{ padding: `0 ${1.5 * fontScale}rem ${1.5 * fontScale}rem` }}
+        >
+          <div
+            className="relative mb-4"
+            style={{ marginTop: `-${3 * fontScale}rem` }}
+          >
             <div className="relative inline-block">
-              {/* Avatar Key에 URL을 넣어주어 URL 변경시 강제 리렌더링 유도 */}
               <Avatar
-                className="w-24 h-24 border-4 border-white shadow-lg"
+                className="border-4 border-white shadow-lg"
+                style={{
+                  width: `${6 * fontScale}rem`,
+                  height: `${6 * fontScale}rem`,
+                }}
                 key={profile?.avatar_url}
               >
                 {profile?.avatar_url ? (
                   <AvatarImage src={profile.avatar_url} alt={profile.name} />
                 ) : null}
-                <AvatarFallback className="bg-orange-100 text-orange-600 text-2xl font-bold">
+                <AvatarFallback
+                  className="bg-orange-100 text-orange-600 font-bold"
+                  style={{ fontSize: `${1.5 * fontScale}rem` }}
+                >
                   {profile?.name?.[0] || "?"}
                 </AvatarFallback>
               </Avatar>
 
               <button
-                className="absolute bottom-0 right-0 w-8 h-8 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                className="absolute bottom-0 right-0 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-lg transition-colors"
+                style={{
+                  width: `${2 * fontScale}rem`,
+                  height: `${2 * fontScale}rem`,
+                }}
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingPhoto}
               >
                 {uploadingPhoto ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <div
+                    className="animate-spin rounded-full border-2 border-white border-t-transparent"
+                    style={{
+                      width: `${1 * fontScale}rem`,
+                      height: `${1 * fontScale}rem`,
+                    }}
+                  />
                 ) : (
-                  <Camera className="w-4 h-4 text-white" />
+                  <Camera
+                    style={{
+                      width: `${1 * fontScale}rem`,
+                      height: `${1 * fontScale}rem`,
+                    }}
+                    className="text-white"
+                  />
                 )}
               </button>
 
@@ -249,26 +291,58 @@ export function ProfileSettings() {
 
             {profile?.avatar_url && (
               <button
-                className="absolute top-0 left-20 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow transition-colors"
+                className="absolute bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow transition-colors"
+                style={{
+                  top: 0,
+                  left: `${5 * fontScale}rem`,
+                  width: `${1.5 * fontScale}rem`,
+                  height: `${1.5 * fontScale}rem`,
+                }}
                 onClick={handleDeletePhoto}
                 title="사진 삭제"
               >
-                <X className="w-3 h-3 text-white" />
+                <X
+                  style={{
+                    width: `${0.75 * fontScale}rem`,
+                    height: `${0.75 * fontScale}rem`,
+                  }}
+                  className="text-white"
+                />
               </button>
             )}
           </div>
 
-          <div className="mb-4">
-            <h3 className="text-xl font-bold text-gray-900">{profile?.name}</h3>
-            <p className="text-sm text-gray-500">{profile?.email}</p>
+          <div style={{ marginBottom: `${1 * fontScale}rem` }}>
+            <h3
+              className="font-bold text-gray-900"
+              style={{ fontSize: `${1.25 * fontScale}rem` }}
+            >
+              {profile?.name}
+            </h3>
+            <p
+              className="text-gray-500"
+              style={{ fontSize: `${0.875 * fontScale}rem` }}
+            >
+              {profile?.email}
+            </p>
           </div>
 
           <Button
             variant="outline"
             className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
+            style={{
+              fontSize: `${1 * fontScale}rem`,
+              padding: `${0.5 * fontScale}rem ${1 * fontScale}rem`,
+            }}
             onClick={() => setIsEditDialogOpen(true)}
           >
-            <Edit2 className="w-4 h-4 mr-2" />
+            <Edit2
+              style={{
+                width: `${1 * fontScale}rem`,
+                height: `${1 * fontScale}rem`,
+                marginRight: `${0.5 * fontScale}rem`,
+              }}
+            />
             프로필 편집
           </Button>
         </CardContent>
@@ -276,45 +350,137 @@ export function ProfileSettings() {
 
       {/* 상세 정보 */}
       <Card className="border-orange-100">
-        <CardContent className="p-4 space-y-4">
-          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-            <User className="w-4 h-4 text-orange-500" />내 정보
+        <CardContent style={{ padding: `${1 * fontScale}rem` }}>
+          <h4
+            className="font-semibold text-gray-900 flex items-center gap-2"
+            style={{
+              fontSize: `${1 * fontScale}rem`,
+              marginBottom: `${1 * fontScale}rem`,
+            }}
+          >
+            <User
+              style={{
+                width: `${1 * fontScale}rem`,
+                height: `${1 * fontScale}rem`,
+              }}
+              className="text-orange-500"
+            />
+            내 정보
           </h4>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center gap-3 text-sm">
-                <User className="w-4 h-4 text-orange-400" />
-                <span className="text-gray-600">이름</span>
+            {/* 이름 */}
+            <div
+              className="flex items-center justify-between border-b border-gray-100"
+              style={{ padding: `${0.5 * fontScale}rem 0` }}
+            >
+              <div
+                className="flex items-center text-gray-600"
+                style={{
+                  gap: `${0.75 * fontScale}rem`,
+                  fontSize: `${0.875 * fontScale}rem`,
+                }}
+              >
+                <User
+                  style={{
+                    width: `${1 * fontScale}rem`,
+                    height: `${1 * fontScale}rem`,
+                  }}
+                  className="text-orange-400"
+                />
+                <span>이름</span>
               </div>
-              <span className="font-medium">{profile?.name}</span>
+              <span
+                className="font-medium"
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+              >
+                {profile?.name}
+              </span>
             </div>
 
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center gap-3 text-sm">
-                <Mail className="w-4 h-4 text-orange-400" />
-                <span className="text-gray-600">이메일</span>
+            {/* 이메일 */}
+            <div
+              className="flex items-center justify-between border-b border-gray-100"
+              style={{ padding: `${0.5 * fontScale}rem 0` }}
+            >
+              <div
+                className="flex items-center text-gray-600"
+                style={{
+                  gap: `${0.75 * fontScale}rem`,
+                  fontSize: `${0.875 * fontScale}rem`,
+                }}
+              >
+                <Mail
+                  style={{
+                    width: `${1 * fontScale}rem`,
+                    height: `${1 * fontScale}rem`,
+                  }}
+                  className="text-orange-400"
+                />
+                <span>이메일</span>
               </div>
-              <span className="font-medium">{profile?.email}</span>
+              <span
+                className="font-medium"
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+              >
+                {profile?.email}
+              </span>
             </div>
 
-            <div className="flex items-center justify-between py-2 border-b border-gray-100">
-              <div className="flex items-center gap-3 text-sm">
-                <Phone className="w-4 h-4 text-orange-400" />
-                <span className="text-gray-600">전화번호</span>
+            {/* 전화번호 */}
+            <div
+              className="flex items-center justify-between border-b border-gray-100"
+              style={{ padding: `${0.5 * fontScale}rem 0` }}
+            >
+              <div
+                className="flex items-center text-gray-600"
+                style={{
+                  gap: `${0.75 * fontScale}rem`,
+                  fontSize: `${0.875 * fontScale}rem`,
+                }}
+              >
+                <Phone
+                  style={{
+                    width: `${1 * fontScale}rem`,
+                    height: `${1 * fontScale}rem`,
+                  }}
+                  className="text-orange-400"
+                />
+                <span>전화번호</span>
               </div>
-              <span className="font-medium">
+              <span
+                className="font-medium"
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+              >
                 {formatPhoneNumber(profile?.phone)}
               </span>
             </div>
 
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-3 text-sm">
-                <Shield className="w-4 h-4 text-orange-400" />
-                <span className="text-gray-600">가입일</span>
+            {/* 가입일 */}
+            <div
+              className="flex items-center justify-between"
+              style={{ padding: `${0.5 * fontScale}rem 0` }}
+            >
+              <div
+                className="flex items-center text-gray-600"
+                style={{
+                  gap: `${0.75 * fontScale}rem`,
+                  fontSize: `${0.875 * fontScale}rem`,
+                }}
+              >
+                <Shield
+                  style={{
+                    width: `${1 * fontScale}rem`,
+                    height: `${1 * fontScale}rem`,
+                  }}
+                  className="text-orange-400"
+                />
+                <span>가입일</span>
               </div>
-              <span className="font-medium">
-                {/* [수정 3] joinedDate 우선 사용, 없으면 created_at 사용 */}
+              <span
+                className="font-medium"
+                style={{ fontSize: `${0.875 * fontScale}rem` }}
+              >
                 {formatDate(profile?.joinedDate || profile?.created_at || "")}
               </span>
             </div>
@@ -322,101 +488,207 @@ export function ProfileSettings() {
         </CardContent>
       </Card>
 
+      {/* 메뉴 카드 */}
       <Card className="border-orange-100">
-        <CardContent className="p-2">
-          <button className="w-full flex items-center gap-3 p-3 hover:bg-orange-50 rounded-lg transition-colors">
-            <Bell className="w-5 h-5 text-orange-500" />
-            <span className="flex-1 text-left">알림 설정</span>
-            <span className="text-gray-400">›</span>
-          </button>
-
-          <button className="w-full flex items-center gap-3 p-3 hover:bg-orange-50 rounded-lg transition-colors">
-            <Settings className="w-5 h-5 text-orange-500" />
-            <span className="flex-1 text-left">앱 설정</span>
-            <span className="text-gray-400">›</span>
-          </button>
-
-          <button className="w-full flex items-center gap-3 p-3 hover:bg-orange-50 rounded-lg transition-colors">
-            <HelpCircle className="w-5 h-5 text-orange-500" />
-            <span className="flex-1 text-left">도움말</span>
+        <CardContent style={{ padding: `${0.5 * fontScale}rem` }}>
+          <button
+            className="w-full flex items-center hover:bg-orange-50 rounded-lg transition-colors"
+            style={{
+              gap: `${0.75 * fontScale}rem`,
+              padding: `${0.75 * fontScale}rem`,
+            }}
+          >
+            <Bell
+              style={{
+                width: `${1.25 * fontScale}rem`,
+                height: `${1.25 * fontScale}rem`,
+              }}
+              className="text-orange-500"
+            />
+            <span
+              className="flex-1 text-left"
+              style={{ fontSize: `${1 * fontScale}rem` }}
+            >
+              알림 설정
+            </span>
             <span className="text-gray-400">›</span>
           </button>
 
           <button
-            className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-lg transition-colors text-red-600"
+            className="w-full flex items-center hover:bg-orange-50 rounded-lg transition-colors"
+            style={{
+              gap: `${0.75 * fontScale}rem`,
+              padding: `${0.75 * fontScale}rem`,
+            }}
+          >
+            <Settings
+              style={{
+                width: `${1.25 * fontScale}rem`,
+                height: `${1.25 * fontScale}rem`,
+              }}
+              className="text-orange-500"
+            />
+            <span
+              className="flex-1 text-left"
+              style={{ fontSize: `${1 * fontScale}rem` }}
+            >
+              앱 설정
+            </span>
+            <span className="text-gray-400">›</span>
+          </button>
+
+          <button
+            className="w-full flex items-center hover:bg-orange-50 rounded-lg transition-colors"
+            style={{
+              gap: `${0.75 * fontScale}rem`,
+              padding: `${0.75 * fontScale}rem`,
+            }}
+          >
+            <HelpCircle
+              style={{
+                width: `${1.25 * fontScale}rem`,
+                height: `${1.25 * fontScale}rem`,
+              }}
+              className="text-orange-500"
+            />
+            <span
+              className="flex-1 text-left"
+              style={{ fontSize: `${1 * fontScale}rem` }}
+            >
+              도움말
+            </span>
+            <span className="text-gray-400">›</span>
+          </button>
+
+          <button
+            className="w-full flex items-center hover:bg-red-50 rounded-lg transition-colors text-red-600"
+            style={{
+              gap: `${0.75 * fontScale}rem`,
+              padding: `${0.75 * fontScale}rem`,
+            }}
             onClick={handleLogout}
           >
-            <LogOut className="w-5 h-5" />
-            <span className="flex-1 text-left">로그아웃</span>
+            <LogOut
+              style={{
+                width: `${1.25 * fontScale}rem`,
+                height: `${1.25 * fontScale}rem`,
+              }}
+            />
+            <span
+              className="flex-1 text-left"
+              style={{ fontSize: `${1 * fontScale}rem` }}
+            >
+              로그아웃
+            </span>
           </button>
         </CardContent>
       </Card>
 
+      {/* 프로필 편집 다이얼로그 */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="border-orange-100">
           <DialogHeader>
-            <DialogTitle>프로필 편집</DialogTitle>
+            <DialogTitle style={{ fontSize: `${1.125 * fontScale}rem` }}>
+              프로필 편집
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
+          <div
+            className="space-y-4"
+            style={{ marginTop: `${1 * fontScale}rem` }}
+          >
             <div className="flex justify-center">
               <div className="relative">
-                {/* 다이얼로그 내부 아바타에도 키 적용 */}
-                <Avatar className="w-20 h-20" key={profile?.avatar_url}>
+                <Avatar
+                  style={{
+                    width: `${5 * fontScale}rem`,
+                    height: `${5 * fontScale}rem`,
+                  }}
+                  key={profile?.avatar_url}
+                >
                   {profile?.avatar_url ? (
                     <AvatarImage src={profile.avatar_url} alt={profile.name} />
                   ) : null}
-                  <AvatarFallback className="bg-orange-100 text-orange-600 text-xl">
+                  <AvatarFallback
+                    className="bg-orange-100 text-orange-600"
+                    style={{ fontSize: `${1.25 * fontScale}rem` }}
+                  >
                     {profile?.name?.[0] || "?"}
                   </AvatarFallback>
                 </Avatar>
                 <button
-                  className="absolute bottom-0 right-0 w-7 h-7 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow"
+                  className="absolute bottom-0 right-0 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow"
+                  style={{
+                    width: `${1.75 * fontScale}rem`,
+                    height: `${1.75 * fontScale}rem`,
+                  }}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Camera className="w-3.5 h-3.5 text-white" />
+                  <Camera
+                    style={{
+                      width: `${0.875 * fontScale}rem`,
+                      height: `${0.875 * fontScale}rem`,
+                    }}
+                    className="text-white"
+                  />
                 </button>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>이름</Label>
+              <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                이름
+              </Label>
               <Input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="이름을 입력하세요"
                 className="border-orange-200 focus:border-orange-400"
+                style={{ fontSize: `${1 * fontScale}rem` }}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>이메일</Label>
+              <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                이메일
+              </Label>
               <Input
                 value={profile?.email || ""}
                 disabled
                 className="bg-gray-50 text-gray-500"
+                style={{ fontSize: `${1 * fontScale}rem` }}
               />
-              <p className="text-xs text-gray-400">
+              <p
+                className="text-gray-400"
+                style={{ fontSize: `${0.75 * fontScale}rem` }}
+              >
                 이메일은 변경할 수 없습니다
               </p>
             </div>
 
             <div className="space-y-2">
-              <Label>전화번호</Label>
+              <Label style={{ fontSize: `${0.875 * fontScale}rem` }}>
+                전화번호
+              </Label>
               <Input
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
                 placeholder="010-0000-0000"
                 className="border-orange-200 focus:border-orange-400"
+                style={{ fontSize: `${1 * fontScale}rem` }}
               />
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div
+              className="flex gap-2"
+              style={{ paddingTop: `${0.5 * fontScale}rem` }}
+            >
               <Button
                 variant="outline"
                 className="flex-1"
                 onClick={() => setIsEditDialogOpen(false)}
                 disabled={saving}
+                style={{ fontSize: `${1 * fontScale}rem` }}
               >
                 취소
               </Button>
@@ -424,15 +696,28 @@ export function ProfileSettings() {
                 className="flex-1 bg-orange-500 hover:bg-orange-600"
                 onClick={handleSaveProfile}
                 disabled={saving}
+                style={{ fontSize: `${1 * fontScale}rem` }}
               >
                 {saving ? (
                   <span className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    <div
+                      className="animate-spin rounded-full border-2 border-white border-t-transparent"
+                      style={{
+                        width: `${1 * fontScale}rem`,
+                        height: `${1 * fontScale}rem`,
+                      }}
+                    />
                     저장 중...
                   </span>
                 ) : (
                   <>
-                    <Save className="w-4 h-4 mr-2" />
+                    <Save
+                      style={{
+                        width: `${1 * fontScale}rem`,
+                        height: `${1 * fontScale}rem`,
+                        marginRight: `${0.5 * fontScale}rem`,
+                      }}
+                    />
                     저장
                   </>
                 )}

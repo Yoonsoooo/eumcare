@@ -137,6 +137,7 @@ export class APIClient {
     return file;
   }
 
+  // ✅ [수정됨] 가족 구성원 사진 업로드 - 실제 업로드 로직 추가
   async uploadMemberPhoto(memberId: string, formData: FormData) {
     console.log(`📸 [Upload Start] Member ID: ${memberId}`);
 
@@ -148,12 +149,47 @@ export class APIClient {
       const fileName = `${Date.now()}.${fileExt}`;
       const filePath = `${memberId}/${fileName}`;
 
+      // 기존 사진 삭제 시도
+      try {
+        const { data: currentProfile } = await supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", memberId)
+          .single();
+
+        if (currentProfile?.avatar_url) {
+          const urlParts = currentProfile.avatar_url.split("/avatars/");
+          if (urlParts.length > 1) {
+            const oldFilePath = urlParts[1];
+            await supabase.storage.from("avatars").remove([oldFilePath]);
+            console.log("🗑️ Old photo deleted:", oldFilePath);
+          }
+        }
+      } catch (e) {
+        console.warn("⚠️ 기존 이미지 삭제 중 오류 (무시 가능):", e);
+      }
+
+      // ✅ 실제 파일 업로드
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error("❌ Storage Upload Error:", uploadError);
+        throw uploadError;
+      }
+
+      // Public URL 생성
       const {
         data: { publicUrl },
       } = supabase.storage.from("avatars").getPublicUrl(filePath);
 
       console.log("🔗 Generated Public URL:", publicUrl);
 
+      // DB 업데이트
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl, updated_at: new Date() })
@@ -164,6 +200,7 @@ export class APIClient {
         throw updateError;
       }
 
+      console.log("✅ Photo upload successful!");
       return { success: true, data: publicUrl };
     } catch (e) {
       console.error("🔥 uploadMemberPhoto Exception:", e);
@@ -213,9 +250,6 @@ export class APIClient {
 
       if (uploadError) {
         console.error("❌ MyProfile Upload Error:", uploadError);
-        console.error(
-          "💡 힌트: Supabase Storage 'avatars' 버킷 권한(Policy)을 확인하세요."
-        );
         throw uploadError;
       }
 
@@ -346,7 +380,6 @@ export class APIClient {
   }
 
   async removeFamilyMember(memberId: string) {
-    // 멤버 ID로 이메일 조회
     const { data: profile } = await supabase
       .from("profiles")
       .select("email")
@@ -362,7 +395,6 @@ export class APIClient {
     } = await supabase.auth.getUser();
     if (!user?.email) throw new Error("로그인이 필요합니다.");
 
-    // 해당 멤버와 관련된 초대장 삭제 또는 상태 변경
     const { error } = await supabase
       .from("invitations")
       .delete()
@@ -404,7 +436,6 @@ export class APIClient {
         .select("*", { count: "exact", head: true })
         .eq("author_email", email);
 
-      // 마지막 활동 시간 조회
       const { data: lastActivity } = await supabase
         .from("diary_entries")
         .select("created_at")
@@ -434,12 +465,10 @@ export class APIClient {
   }
 
   // ==========================================
-  // 3-1. Member Activity Details (구성원 활동 상세 조회) ✨ NEW
+  // 3-1. Member Activity Details (구성원 활동 상세 조회)
   // ==========================================
 
-  // 멤버 ID로 이메일 조회하는 헬퍼 함수
   private async getMemberEmailById(memberId: string): Promise<string | null> {
-    // memberId가 이메일 형식인지 확인
     if (memberId.includes("@")) {
       return memberId;
     }
@@ -453,7 +482,6 @@ export class APIClient {
     return profile?.email || null;
   }
 
-  // 식사 기록 조회
   async getMemberMeals(memberId: string) {
     try {
       const email = await this.getMemberEmailById(memberId);
@@ -469,10 +497,9 @@ export class APIClient {
 
       if (error) throw error;
 
-      // 프론트엔드 인터페이스에 맞게 데이터 변환
       const formattedData = (data || []).map((entry) => ({
         id: entry.id,
-        mealType: entry.title || "식사", // title을 mealType으로 사용
+        mealType: entry.title || "식사",
         description: entry.content || "",
         photoUrl: entry.image_url || null,
         createdAt: entry.created_at,
@@ -485,7 +512,6 @@ export class APIClient {
     }
   }
 
-  // 일정 조회
   async getMemberSchedules(memberId: string) {
     try {
       const email = await this.getMemberEmailById(memberId);
@@ -517,13 +543,11 @@ export class APIClient {
     }
   }
 
-  // 투약 기록 조회
   async getMemberMedications(memberId: string) {
     try {
       const email = await this.getMemberEmailById(memberId);
       if (!email) return { data: [] };
 
-      // diary_entries에서 medicine 타입 조회
       const { data: diaryMeds, error: diaryError } = await supabase
         .from("diary_entries")
         .select("*")
@@ -532,7 +556,6 @@ export class APIClient {
         .order("created_at", { ascending: false })
         .limit(30);
 
-      // medications 테이블에서도 조회
       const { data: tableMeds, error: tableError } = await supabase
         .from("medications")
         .select("*")
@@ -543,7 +566,6 @@ export class APIClient {
       if (diaryError) console.error("diaryMeds error:", diaryError);
       if (tableError) console.error("tableMeds error:", tableError);
 
-      // 두 소스의 데이터를 합치고 포맷팅
       const formattedDiaryMeds = (diaryMeds || []).map((entry) => ({
         id: entry.id,
         medicationName: entry.title || "약",
@@ -567,7 +589,6 @@ export class APIClient {
         source: "table",
       }));
 
-      // 합치고 시간순 정렬
       const allMeds = [...formattedDiaryMeds, ...formattedTableMeds].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -580,7 +601,6 @@ export class APIClient {
     }
   }
 
-  // 수면 기록 조회
   async getMemberSleepRecords(memberId: string) {
     try {
       const email = await this.getMemberEmailById(memberId);
@@ -597,13 +617,11 @@ export class APIClient {
       if (error) throw error;
 
       const formattedData = (data || []).map((entry) => {
-        // content에서 수면 시간 정보 파싱 시도
         let sleepTime = "";
         let wakeTime = "";
         let quality = 3;
         let note = entry.content || "";
 
-        // content 형식 예: "취침: 22:00, 기상: 07:00, 질: 4" 또는 자유 형식
         if (entry.content) {
           const sleepMatch = entry.content.match(/취침[:\s]*(\d{1,2}:\d{2})/);
           const wakeMatch = entry.content.match(/기상[:\s]*(\d{1,2}:\d{2})/);
@@ -631,7 +649,6 @@ export class APIClient {
     }
   }
 
-  // 커뮤니티 게시글 조회
   async getMemberCommunityPosts(memberId: string) {
     try {
       const email = await this.getMemberEmailById(memberId);
@@ -663,7 +680,6 @@ export class APIClient {
     }
   }
 
-  // 모든 활동 통합 조회 (총 활동)
   async getMemberAllActivities(memberId: string) {
     try {
       const [meals, schedules, medications, sleeps, communities] =
@@ -675,7 +691,6 @@ export class APIClient {
           this.getMemberCommunityPosts(memberId),
         ]);
 
-      // 모든 활동에 타입 추가하고 합치기
       const allActivities = [
         ...(meals.data || []).map((item) => ({ ...item, _type: "meal" })),
         ...(schedules.data || []).map((item) => ({
@@ -693,7 +708,6 @@ export class APIClient {
         })),
       ];
 
-      // 시간순 정렬 (최신순)
       allActivities.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -1002,39 +1016,441 @@ export class APIClient {
   }
 
   // ==========================================
-  // 6. Community (커뮤니티)
+  // 6. Community (커뮤니티) - 완전한 기능
   // ==========================================
 
   async addCommunityPost(title: string, content: string, category: string) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 프로필에서 이름 가져오기
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name, avatar_url")
+      .eq("id", user.id)
+      .single();
+
+    const authorName =
+      profile?.name ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0] ||
+      "익명";
+
     const { data, error } = await supabase
       .from("posts")
       .insert({
         title,
         content,
         category,
-        user_id: user?.id,
-        author_email: user?.email,
+        user_id: user.id,
+        author_email: user.email,
+        author_name: authorName,
+        likes_count: 0,
+        comments_count: 0,
       })
       .select()
+      .single();
+
+    if (error) throw error;
+
+    // 프로필 정보 포함해서 반환
+    return {
+      data: {
+        ...data,
+        authorName: authorName,
+        authorAvatar: profile?.avatar_url || null,
+      },
+    };
+  }
+
+  async getCommunityPosts() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    // 현재 사용자가 좋아요한 게시글 목록 조회
+    let likedPostIds: string[] = [];
+    if (user) {
+      const { data: likes } = await supabase
+        .from("post_likes")
+        .select("post_id")
+        .eq("user_id", user.id);
+      likedPostIds = (likes || []).map((like) => like.post_id);
+    }
+
+    // 모든 작성자의 프로필 정보 가져오기
+    const authorEmails = [
+      ...new Set((data || []).map((post) => post.author_email).filter(Boolean)),
+    ];
+
+    let profilesMap: Record<
+      string,
+      { name: string; avatar_url: string | null }
+    > = {};
+
+    if (authorEmails.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("email, name, avatar_url")
+        .in("email", authorEmails);
+
+      (profiles || []).forEach((profile) => {
+        if (profile.email) {
+          profilesMap[profile.email] = {
+            name: profile.name || profile.email.split("@")[0],
+            avatar_url: profile.avatar_url,
+          };
+        }
+      });
+    }
+
+    // 데이터 정규화 및 프로필 정보 추가
+    const normalizedData = (data || []).map((post) => {
+      const profile = profilesMap[post.author_email] || null;
+      return {
+        ...post,
+        authorName:
+          profile?.name ||
+          post.author_name ||
+          post.author_email?.split("@")[0] ||
+          "익명",
+        authorAvatar: profile?.avatar_url || null,
+        createdAt: post.created_at,
+        likes: post.likes_count || 0,
+        comments: post.comments_count || 0,
+        isLikedByMe: likedPostIds.includes(post.id),
+      };
+    });
+
+    return { data: normalizedData };
+  }
+
+  async getPostById(postId: string) {
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("id", postId)
       .single();
     if (error) throw error;
     return { data };
   }
 
-  async getCommunityPosts() {
+  // ✅ 게시글 삭제
+  async deletePost(postId: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 본인 게시글인지 확인
+    const { data: post } = await supabase
+      .from("posts")
+      .select("user_id, author_email")
+      .eq("id", postId)
+      .single();
+
+    if (!post) throw new Error("게시글을 찾을 수 없습니다");
+    if (post.user_id !== user.id && post.author_email !== user.email) {
+      throw new Error("본인의 게시글만 삭제할 수 있습니다");
+    }
+
+    // 관련 댓글도 함께 삭제 (CASCADE 설정이 없는 경우)
+    await supabase.from("comments").delete().eq("post_id", postId);
+
+    // 관련 좋아요도 삭제
+    await supabase.from("post_likes").delete().eq("post_id", postId);
+
+    const { error } = await supabase.from("posts").delete().eq("id", postId);
+
+    if (error) throw error;
+    return { success: true };
+  }
+
+  // ✅ 좋아요 토글 (좋아요/취소)
+  async likePost(postId: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 이미 좋아요 했는지 확인
+    const { data: existingLike } = await supabase
+      .from("post_likes")
+      .select("id")
+      .eq("post_id", postId)
+      .eq("user_id", user.id)
+      .maybeSingle(); // single() 대신 maybeSingle() 사용
+
+    const { data: post } = await supabase
+      .from("posts")
+      .select("likes_count")
+      .eq("id", postId)
+      .single();
+
+    const currentCount = post?.likes_count || 0;
+
+    if (existingLike) {
+      // 이미 좋아요 했으면 취소
+      await supabase
+        .from("post_likes")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", user.id);
+
+      const newCount = Math.max(currentCount - 1, 0);
+      await supabase
+        .from("posts")
+        .update({ likes_count: newCount })
+        .eq("id", postId);
+
+      return { data: { likes: newCount, isLiked: false } };
+    } else {
+      // 좋아요 추가
+      await supabase.from("post_likes").insert({
+        post_id: postId,
+        user_id: user.id,
+        user_email: user.email,
+      });
+
+      const newCount = currentCount + 1;
+      await supabase
+        .from("posts")
+        .update({ likes_count: newCount })
+        .eq("id", postId);
+
+      return { data: { likes: newCount, isLiked: true } };
+    }
+  }
+
+  // ✅ 댓글 조회 (프로필 정보 포함)
+  async getPostComments(postId: string) {
+    const { data, error } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("post_id", postId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("getPostComments error:", error);
+      return { data: [] };
+    }
+
+    // 모든 댓글 작성자의 프로필 정보 가져오기
+    const authorEmails = [
+      ...new Set((data || []).map((c) => c.author_email).filter(Boolean)),
+    ];
+
+    let profilesMap: Record<
+      string,
+      { name: string; avatar_url: string | null }
+    > = {};
+
+    if (authorEmails.length > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("email, name, avatar_url")
+        .in("email", authorEmails);
+
+      (profiles || []).forEach((profile) => {
+        if (profile.email) {
+          profilesMap[profile.email] = {
+            name: profile.name || profile.email.split("@")[0],
+            avatar_url: profile.avatar_url,
+          };
+        }
+      });
+    }
+
+    // 프로필 정보 추가
+    const commentsWithProfile = (data || []).map((comment) => {
+      const profile = profilesMap[comment.author_email] || null;
+      return {
+        ...comment,
+        authorName:
+          profile?.name ||
+          comment.author_name ||
+          comment.author_email?.split("@")[0] ||
+          "익명",
+        authorAvatar: profile?.avatar_url || null,
+      };
+    });
+
+    return { data: commentsWithProfile };
+  }
+
+  // ✅ 댓글 작성
+  async addComment(postId: string, content: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 프로필에서 이름과 아바타 가져오기
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name, avatar_url")
+      .eq("id", user.id)
+      .single();
+
+    const authorName =
+      profile?.name ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0] ||
+      "익명";
+
+    const { data, error } = await supabase
+      .from("comments")
+      .insert({
+        post_id: postId,
+        content,
+        user_id: user.id,
+        author_email: user.email,
+        author_name: authorName,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 게시글의 댓글 수 업데이트
+    const { data: post } = await supabase
+      .from("posts")
+      .select("comments_count")
+      .eq("id", postId)
+      .single();
+
+    await supabase
+      .from("posts")
+      .update({ comments_count: (post?.comments_count || 0) + 1 })
+      .eq("id", postId);
+
+    // 프로필 정보 포함해서 반환
+    return {
+      data: {
+        ...data,
+        authorName: authorName,
+        authorAvatar: profile?.avatar_url || null,
+      },
+    };
+  }
+
+  // 게시글 수정
+  async updatePost(
+    postId: string,
+    updates: { title?: string; content?: string; category?: string }
+  ) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 본인 게시글인지 확인
+    const { data: post } = await supabase
+      .from("posts")
+      .select("user_id, author_email")
+      .eq("id", postId)
+      .single();
+
+    if (!post) throw new Error("게시글을 찾을 수 없습니다");
+    if (post.user_id !== user.id && post.author_email !== user.email) {
+      throw new Error("본인의 게시글만 수정할 수 있습니다");
+    }
+
     const { data, error } = await supabase
       .from("posts")
-      .select("*")
-      .order("created_at", { ascending: false });
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", postId)
+      .select()
+      .single();
+
     if (error) throw error;
     return { data };
   }
 
-  async likePost(postId: string) {
-    return { data: { success: true } };
+  // 댓글 수정
+  async updateComment(commentId: string, content: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 본인 댓글인지 확인
+    const { data: comment } = await supabase
+      .from("comments")
+      .select("user_id, author_email")
+      .eq("id", commentId)
+      .single();
+
+    if (!comment) throw new Error("댓글을 찾을 수 없습니다");
+    if (comment.user_id !== user.id && comment.author_email !== user.email) {
+      throw new Error("본인의 댓글만 수정할 수 있습니다");
+    }
+
+    const { data, error } = await supabase
+      .from("comments")
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", commentId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { data };
+  }
+
+  // ✅ 댓글 삭제
+  async deleteComment(commentId: string, postId: string) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("로그인이 필요합니다");
+
+    // 본인 댓글인지 확인
+    const { data: comment } = await supabase
+      .from("comments")
+      .select("user_id, author_email")
+      .eq("id", commentId)
+      .single();
+
+    if (!comment) throw new Error("댓글을 찾을 수 없습니다");
+    if (comment.user_id !== user.id && comment.author_email !== user.email) {
+      throw new Error("본인의 댓글만 삭제할 수 있습니다");
+    }
+
+    const { error } = await supabase
+      .from("comments")
+      .delete()
+      .eq("id", commentId);
+
+    if (error) throw error;
+
+    // 게시글의 댓글 수 업데이트
+    const { data: post } = await supabase
+      .from("posts")
+      .select("comments_count")
+      .eq("id", postId)
+      .single();
+
+    await supabase
+      .from("posts")
+      .update({ comments_count: Math.max((post?.comments_count || 1) - 1, 0) })
+      .eq("id", postId);
+
+    return { success: true };
   }
 }
 

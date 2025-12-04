@@ -15,7 +15,7 @@ import {
   X,
   ChevronDown,
   Type,
-  User, // ✨ 마이페이지 아이콘
+  User,
 } from "lucide-react";
 import { Dashboard } from "./components/Dashboard";
 import { SharedDiary } from "./components/SharedDiary";
@@ -23,10 +23,15 @@ import { ScheduleManager } from "./components/ScheduleManager";
 import { MedicineReminder } from "./components/MedicineReminder";
 import { Community } from "./components/Community";
 import { FamilyMembers } from "./components/FamilyMembers";
-import { ProfileSettings } from "./components/ProfileSettings"; // ✨ 추가
+import { ProfileSettings } from "./components/ProfileSettings";
 import { AuthDialog } from "./components/AuthDialog";
 import { OnboardingDialog } from "./components/OnboardingDialog";
-import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "./components/ui/sheet";
 import { Button } from "./components/ui/button";
 import {
   Popover,
@@ -38,7 +43,6 @@ import { apiClient } from "./utils/api";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 
-// ✨ profile 추가
 type Tab =
   | "home"
   | "diary"
@@ -328,7 +332,7 @@ export default function App() {
     );
   }
 
-  // ✨ profile 케이스 추가
+  // ✅ 수정된 renderContent - Community에 user 정보 전달
   const renderContent = () => {
     const fontScale = getFontScale();
 
@@ -347,10 +351,17 @@ export default function App() {
       case "reminder":
         return <MedicineReminder fontScale={fontScale} />;
       case "community":
-        return <Community fontScale={fontScale} />;
+        // ✅ 수정: currentUserEmail과 currentUserId 전달
+        return (
+          <Community
+            fontScale={fontScale}
+            currentUserEmail={user?.email}
+            currentUserId={user?.id}
+          />
+        );
       case "family":
         return <FamilyMembers fontScale={fontScale} />;
-      case "profile": // ✨ 추가
+      case "profile":
         return (
           <ProfileSettings fontScale={fontScale} onSignOut={handleSignOut} />
         );
@@ -408,6 +419,8 @@ export default function App() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 p-4">
+                {/* ✅ 접근성 오류 해결: SheetTitle 추가 */}
+                <SheetTitle className="sr-only">메뉴</SheetTitle>
                 <div
                   className={`flex flex-col gap-2 mt-8 ${getFontSizeClass()}`}
                 >
@@ -426,10 +439,8 @@ export default function App() {
                   />
                   <NavButton tab="family" icon={Users} label="가족 구성원" />
 
-                  {/* ✨ 구분선 */}
                   <div className="h-px bg-orange-100 my-2" />
 
-                  {/* ✨ 마이페이지 */}
                   <NavButton tab="profile" icon={User} label="마이페이지" />
                 </div>
               </SheetContent>
@@ -630,7 +641,7 @@ export default function App() {
               </Popover>
             )}
 
-            {/* ✨ 마이페이지 버튼 (로그인 상태에서만) */}
+            {/* 마이페이지 버튼 */}
             {user && (
               <Button
                 variant="ghost"
@@ -670,10 +681,8 @@ export default function App() {
             <NavButton tab="community" icon={MessageCircle} label="커뮤니티" />
             <NavButton tab="family" icon={Users} label="가족 구성원" />
 
-            {/* ✨ 구분선 */}
             <div className="h-px bg-orange-100 my-2" />
 
-            {/* ✨ 마이페이지 */}
             <NavButton tab="profile" icon={User} label="마이페이지" />
           </nav>
         </aside>
@@ -737,7 +746,6 @@ export default function App() {
               약 알림
             </span>
           </button>
-          {/* ✨ 마이페이지로 변경 */}
           <button
             onClick={() => setActiveTab("profile")}
             className={`flex flex-col items-center gap-1 p-2 ${
