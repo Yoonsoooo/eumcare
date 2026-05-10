@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import "./index.css";
 // import "./globals.css"; // 만약 globals.css 파일이 없다면 이 줄은 지우세요!
@@ -19,7 +20,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {children}
+        <SpeedInsights />
+        <Analytics />
+      </body>
     </html>
   );
 }
